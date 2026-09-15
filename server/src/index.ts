@@ -1,10 +1,13 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { corsMiddleware } from './cors.js'
+import { rateLimit } from './rateLimit.js'
 
 const app = new Hono()
 
 app.use('/api/*', corsMiddleware())
+// TODO: tune limits once Gemini quota is known.
+app.use('/api/*', rateLimit({ windowMs: 60_000, max: 10 }))
 
 app.get('/health', (c) => c.json({ ok: true }))
 
