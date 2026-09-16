@@ -7,10 +7,16 @@ import { LoadingState } from '@/components/LoadingState'
 import { ResultView } from '@/components/ResultView'
 import { appReducer, INITIAL_STATE, isBusy, type AppState } from '@/lib/appState'
 import { validateSelection } from '@/lib/fileValidation'
-import { extractText, PdfExtractionError } from '@/lib/pdf'
+
+type PdfModule = typeof import('@/lib/pdf')
+
+// pdf.js is most of the bundle, so it is fetched only once someone actually picks a file.
+const loadPdfModule = (): Promise<PdfModule> => import('@/lib/pdf')
 
 const UNEXPECTED_ERROR =
   'Wystąpił nieoczekiwany błąd. Spróbuj ponownie, a jeśli problem się powtórzy, odśwież stronę.'
+const PDF_READER_UNAVAILABLE =
+  'Nie udało się wczytać czytnika PDF. Sprawdź połączenie z internetem i spróbuj ponownie.'
 
 export function App() {
   const [state, dispatch] = useReducer(appReducer, INITIAL_STATE)
@@ -20,14 +26,28 @@ export function App() {
   async function analyzeFile(file: File): Promise<void> {
     dispatch({ type: 'EXTRACTION_STARTED', fileName: file.name })
 
+    let pdf: PdfModule
     try {
-      const { text, pages } = await extractText(file)
+      pdf = await loadPdfModule()
+    } catch {
+      // The chunk could not be downloaded (offline, deploy swapped the hashed file).
+      dispatch({
+        type: 'FAILED',
+        message: PDF_READER_UNAVAILABLE,
+        fileName: file.name,
+        retryFile: file,
+      })
+      return
+    }
+
+    try {
+      const { text, pages } = await pdf.extractText(file)
       dispatch({ type: 'ANALYSIS_STARTED', pages })
 
       const result = await analyze({ fileName: file.name, pages, text })
       dispatch({ type: 'ANALYSIS_SUCCEEDED', result })
     } catch (error) {
-      if (error instanceof PdfExtractionError) {
+      if (error instanceof pdf.PdfExtractionError) {
         dispatch({ type: 'FAILED', message: error.message, fileName: file.name, retryFile: null })
         return
       }
