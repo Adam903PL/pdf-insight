@@ -4,7 +4,9 @@ import { analysisResponseSchema } from './geminiSchema.js'
 import { logger } from './logger.js'
 import { AnalysisResultSchema, type AnalysisResult } from './schema.js'
 
-export const GEMINI_MODEL = 'gemini-3-flash'
+// Gemini 3 Flash is only published under its preview code; the bare `gemini-3-flash`
+// returns 404 NOT_FOUND from v1beta generateContent.
+export const GEMINI_MODEL = 'gemini-3-flash-preview'
 
 /**
  * Whole-analysis budget, shared by the first attempt and the retry. The brief
