@@ -24,16 +24,20 @@ const MAX_TRACKED_CLIENTS = 10_000
 
 /**
  * Railway terminates TLS at its edge, so the socket address is always the proxy.
- * The edge replaces any client-supplied `x-forwarded-for` with the real client IP
- * (verified against production: spoofed values landed in the caller's own bucket).
- * The LAST entry is read, not the first, so this stays correct if a proxy ever
- * appends instead of replacing — the leftmost entry is the one a client can forge.
+ *
+ * Read the FIRST `x-forwarded-for` entry. Railway's edge puts the real client IP
+ * first and appends any client-supplied value after it — the opposite of the usual
+ * "leftmost is forgeable" rule. Verified on production (2026-09-16) with forged
+ * headers: first-hop keying kept every forged request in the caller's own bucket,
+ * while last-hop keying gave each forged value a fresh bucket and bypassed the limit.
+ * Do not switch this to the last entry without re-running that probe.
+ *
  * Falls back to `cf-connecting-ip`, then to a shared bucket.
  */
 function clientKey(c: Context): string {
-  const lastHop = c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim()
-  if (lastHop !== undefined && lastHop !== '') {
-    return lastHop
+  const firstHop = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+  if (firstHop !== undefined && firstHop !== '') {
+    return firstHop
   }
 
   const cloudflareIp = c.req.header('cf-connecting-ip')?.trim()
