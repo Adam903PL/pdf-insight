@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { primaryButton } from './styles'
+import { primaryButton, secondaryButton } from './styles'
 
 export type ErrorStateProps = {
   /** User-facing Polish explanation of what went wrong and what to do. */
@@ -7,12 +7,13 @@ export type ErrorStateProps = {
   fileName: string | null
   /** Present only when sending the same file again could succeed. */
   onRetry?: () => void
+  onChooseFile: () => void
 }
 
-export function ErrorState({ message, fileName, onRetry }: ErrorStateProps) {
+export function ErrorState({ message, fileName, onRetry, onChooseFile }: ErrorStateProps) {
   const headingRef = useRef<HTMLHeadingElement>(null)
 
-  // Move focus here so keyboard and screen-reader users land next to the retry action.
+  // Move focus here so keyboard and screen-reader users land next to the actions.
   useEffect(() => {
     headingRef.current?.focus()
   }, [message])
@@ -27,15 +28,20 @@ export function ErrorState({ message, fileName, onRetry }: ErrorStateProps) {
       )}
       <p className="mt-4 max-w-prose">{message}</p>
 
-      {onRetry ? (
-        <button type="button" onClick={onRetry} className={`${primaryButton} mt-6`}>
-          Spróbuj ponownie
+      <div className="mt-6 flex flex-wrap gap-3">
+        {onRetry && (
+          <button type="button" onClick={onRetry} className={primaryButton}>
+            Spróbuj ponownie
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onChooseFile}
+          className={onRetry ? secondaryButton : primaryButton}
+        >
+          Wybierz inny plik
         </button>
-      ) : (
-        <p className="mt-6 text-sm text-ink-muted">
-          Wybierz inny plik, aby rozpocząć nową analizę.
-        </p>
-      )}
+      </div>
     </section>
   )
 }

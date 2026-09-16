@@ -1,4 +1,4 @@
-import { useReducer } from 'react'
+import { useReducer, useRef } from 'react'
 import { analyze, ApiError } from '@/api/analyze'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
@@ -6,6 +6,7 @@ import { FileDropzone } from '@/components/FileDropzone'
 import { LoadingState } from '@/components/LoadingState'
 import { ResultView } from '@/components/ResultView'
 import { appReducer, INITIAL_STATE, isBusy, type AppState } from '@/lib/appState'
+import { validateSelection } from '@/lib/fileValidation'
 import { extractText, PdfExtractionError } from '@/lib/pdf'
 
 const UNEXPECTED_ERROR =
@@ -13,6 +14,7 @@ const UNEXPECTED_ERROR =
 
 export function App() {
   const [state, dispatch] = useReducer(appReducer, INITIAL_STATE)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const busy = isBusy(state)
 
   async function analyzeFile(file: File): Promise<void> {
@@ -45,6 +47,20 @@ export function App() {
     void analyzeFile(file)
   }
 
+  const handleFilesSelected = (files: File[]): void => {
+    const selection = validateSelection(files)
+    if (!selection.ok) {
+      const { message, fileName } = selection
+      dispatch({ type: 'FAILED', message, fileName, retryFile: null })
+      return
+    }
+    startAnalysis(selection.file)
+  }
+
+  const openFilePicker = (): void => {
+    fileInputRef.current?.click()
+  }
+
   return (
     <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-12 lg:py-14">
       <div className="space-y-6">
@@ -55,15 +71,25 @@ export function App() {
             pobrać jako plik JSON.
           </p>
         </header>
-        <FileDropzone onFileSelected={startAnalysis} disabled={busy} />
+        <FileDropzone
+          onFilesSelected={handleFilesSelected}
+          disabled={busy}
+          inputRef={fileInputRef}
+        />
       </div>
 
-      <StatusView state={state} onRetry={startAnalysis} />
+      <StatusView state={state} onRetry={startAnalysis} onChooseFile={openFilePicker} />
     </main>
   )
 }
 
-function StatusView({ state, onRetry }: { state: AppState; onRetry: (file: File) => void }) {
+type StatusViewProps = {
+  state: AppState
+  onRetry: (file: File) => void
+  onChooseFile: () => void
+}
+
+function StatusView({ state, onRetry, onChooseFile }: StatusViewProps) {
   switch (state.status) {
     case 'idle':
       return <EmptyState />
@@ -80,6 +106,7 @@ function StatusView({ state, onRetry }: { state: AppState; onRetry: (file: File)
           message={state.message}
           fileName={state.fileName}
           onRetry={retryFile ? () => onRetry(retryFile) : undefined}
+          onChooseFile={onChooseFile}
         />
       )
     }
