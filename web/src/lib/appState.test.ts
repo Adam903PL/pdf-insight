@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { appReducer, INITIAL_STATE, isBusy, type AppAction, type AppState } from './appState'
+import { createHistoryEntry } from './history'
 import type { AnalysisResult } from './schema'
 
 const result: AnalysisResult = {
@@ -19,6 +20,7 @@ const result: AnalysisResult = {
   keywords: [],
 }
 
+const entry = createHistoryEntry(result, new Date('2026-09-16T12:00:00.000Z'))
 const file = new File(['%PDF-1.7'], 'umowa.pdf', { type: 'application/pdf' })
 
 function run(state: AppState, ...actions: AppAction[]): AppState {
@@ -33,9 +35,18 @@ describe('appReducer', () => {
     const analyzing = appReducer(extracting, { type: 'ANALYSIS_STARTED', pages: 2 })
     expect(analyzing).toEqual({ status: 'analyzing', fileName: 'umowa.pdf', pages: 2 })
 
-    expect(appReducer(analyzing, { type: 'ANALYSIS_SUCCEEDED', result })).toEqual({
+    expect(appReducer(analyzing, { type: 'ANALYSIS_SUCCEEDED', entry })).toEqual({
       status: 'success',
-      result,
+      entry,
+      fromHistory: false,
+    })
+  })
+
+  it('opens a saved analysis from history without re-analysing', () => {
+    expect(appReducer(INITIAL_STATE, { type: 'HISTORY_ENTRY_OPENED', entry })).toEqual({
+      status: 'success',
+      entry,
+      fromHistory: true,
     })
   })
 
@@ -67,7 +78,7 @@ describe('appReducer', () => {
   })
 
   it.each<AppState>([
-    { status: 'success', result },
+    { status: 'success', entry, fromHistory: false },
     { status: 'error', message: 'x', fileName: null, retryFile: null },
   ])('starts a new analysis from $status', (state) => {
     expect(appReducer(state, { type: 'EXTRACTION_STARTED', fileName: 'nowy.pdf' })).toEqual({
@@ -77,7 +88,9 @@ describe('appReducer', () => {
   })
 
   it('resets to idle when not busy', () => {
-    expect(appReducer({ status: 'success', result }, { type: 'RESET' })).toBe(INITIAL_STATE)
+    const state: AppState = { status: 'success', entry, fromHistory: true }
+
+    expect(appReducer(state, { type: 'RESET' })).toBe(INITIAL_STATE)
   })
 
   it.each<[AppState, AppAction]>([
@@ -88,7 +101,11 @@ describe('appReducer', () => {
     [INITIAL_STATE, { type: 'ANALYSIS_STARTED', pages: 1 }],
     [
       { status: 'extracting', fileName: 'a.pdf' },
-      { type: 'ANALYSIS_SUCCEEDED', result },
+      { type: 'ANALYSIS_SUCCEEDED', entry },
+    ],
+    [
+      { status: 'analyzing', fileName: 'a.pdf', pages: 1 },
+      { type: 'HISTORY_ENTRY_OPENED', entry },
     ],
     [{ status: 'analyzing', fileName: 'a.pdf', pages: 1 }, { type: 'RESET' }],
   ])('throws on an impossible transition from %o', (state, action) => {
@@ -101,6 +118,6 @@ describe('isBusy', () => {
     expect(isBusy({ status: 'extracting', fileName: 'a.pdf' })).toBe(true)
     expect(isBusy({ status: 'analyzing', fileName: 'a.pdf', pages: 1 })).toBe(true)
     expect(isBusy(INITIAL_STATE)).toBe(false)
-    expect(isBusy({ status: 'success', result })).toBe(false)
+    expect(isBusy({ status: 'success', entry, fromHistory: false })).toBe(false)
   })
 })

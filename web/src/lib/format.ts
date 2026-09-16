@@ -53,3 +53,15 @@ export function languageName(code: string): string {
 export function sortByDate<T extends { date: string }>(items: readonly T[]): T[] {
   return [...items].sort((a, b) => a.date.localeCompare(b.date))
 }
+
+/**
+ * A moment in the viewer's local time: `16 wrz 2026, 14:03`. The time zone is a
+ * parameter only so tests can pin it.
+ */
+export function formatTimestamp(isoTimestamp: string, timeZone?: string): string {
+  return new Intl.DateTimeFormat('pl-PL', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone,
+  }).format(new Date(isoTimestamp))
+}

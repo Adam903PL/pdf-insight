@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { formatAmount, formatIsoDate, formatPages, languageName, sortByDate } from './format'
+import {
+  formatAmount,
+  formatIsoDate,
+  formatPages,
+  formatTimestamp,
+  languageName,
+  sortByDate,
+} from './format'
 
 /** Intl output uses (narrow) no-break spaces; compare with ordinary ones. */
 function plainSpaces(text: string): string {
@@ -60,5 +67,13 @@ describe('sortByDate', () => {
       'koniec',
     ])
     expect(dates[0]?.context).toBe('koniec')
+  })
+})
+
+describe('formatTimestamp', () => {
+  it('shows a short Polish date with the time', () => {
+    const formatted = formatTimestamp('2026-09-16T14:03:00.000Z', 'UTC')
+
+    expect(plainSpaces(formatted)).toBe('16 wrz 2026, 14:03')
   })
 })

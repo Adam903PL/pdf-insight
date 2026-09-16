@@ -1,12 +1,21 @@
-import { useReducer, useRef } from 'react'
+import { useReducer, useRef, useState } from 'react'
 import { analyze, ApiError } from '@/api/analyze'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { FileDropzone } from '@/components/FileDropzone'
+import { HistoryPanel } from '@/components/HistoryPanel'
 import { LoadingState } from '@/components/LoadingState'
 import { ResultView } from '@/components/ResultView'
 import { appReducer, INITIAL_STATE, isBusy, type AppState } from '@/lib/appState'
 import { validateSelection } from '@/lib/fileValidation'
+import {
+  addHistoryEntry,
+  clearHistory,
+  createHistoryEntry,
+  loadHistory,
+  type HistoryEntry,
+  type HistoryState,
+} from '@/lib/history'
 
 type PdfModule = typeof import('@/lib/pdf')
 
@@ -20,6 +29,7 @@ const PDF_READER_UNAVAILABLE =
 
 export function App() {
   const [state, dispatch] = useReducer(appReducer, INITIAL_STATE)
+  const [history, setHistory] = useState<HistoryState>(() => loadHistory())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const busy = isBusy(state)
 
@@ -30,7 +40,7 @@ export function App() {
     try {
       pdf = await loadPdfModule()
     } catch {
-      // The chunk could not be downloaded (offline, deploy swapped the hashed file).
+      // The chunk could not be downloaded (offline, or a redeploy replaced the hashed file).
       dispatch({
         type: 'FAILED',
         message: PDF_READER_UNAVAILABLE,
@@ -40,12 +50,13 @@ export function App() {
       return
     }
 
+    let entry: HistoryEntry
     try {
       const { text, pages } = await pdf.extractText(file)
       dispatch({ type: 'ANALYSIS_STARTED', pages })
 
       const result = await analyze({ fileName: file.name, pages, text })
-      dispatch({ type: 'ANALYSIS_SUCCEEDED', result })
+      entry = createHistoryEntry(result)
     } catch (error) {
       if (error instanceof pdf.PdfExtractionError) {
         dispatch({ type: 'FAILED', message: error.message, fileName: file.name, retryFile: null })
@@ -61,6 +72,11 @@ export function App() {
       // Anything else is a bug: show a usable screen, but keep the error loud in the console.
       throw error
     }
+
+    dispatch({ type: 'ANALYSIS_SUCCEEDED', entry })
+    // Saved after the result is on screen, so a storage failure can never replace it with
+    // an error. History cannot change meanwhile: its controls are disabled while busy.
+    setHistory(addHistoryEntry(history.entries, entry))
   }
 
   const startAnalysis = (file: File): void => {
@@ -82,8 +98,8 @@ export function App() {
   }
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-12 lg:py-14">
-      <div className="space-y-6">
+    <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:gap-x-12 lg:py-14">
+      <div className="space-y-6 lg:col-start-1 lg:row-start-1">
         <header>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">PDF Insight</h1>
           <p className="mt-3 text-ink-muted">
@@ -98,7 +114,21 @@ export function App() {
         />
       </div>
 
-      <StatusView state={state} onRetry={startAnalysis} onChooseFile={openFilePicker} />
+      {/* Second in the DOM so on narrow screens the result follows the upload directly. */}
+      <div className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <StatusView state={state} onRetry={startAnalysis} onChooseFile={openFilePicker} />
+      </div>
+
+      <div className="lg:col-start-1 lg:row-start-2">
+        <HistoryPanel
+          entries={history.entries}
+          warning={history.warning}
+          activeId={state.status === 'success' ? state.entry.id : null}
+          disabled={busy}
+          onSelect={(entry) => dispatch({ type: 'HISTORY_ENTRY_OPENED', entry })}
+          onClear={() => setHistory(clearHistory())}
+        />
+      </div>
     </main>
   )
 }
@@ -118,7 +148,12 @@ function StatusView({ state, onRetry, onChooseFile }: StatusViewProps) {
     case 'analyzing':
       return <LoadingState stage="analyzing" fileName={state.fileName} pages={state.pages} />
     case 'success':
-      return <ResultView result={state.result} />
+      return (
+        <ResultView
+          result={state.entry.result}
+          savedAt={state.fromHistory ? state.entry.createdAt : null}
+        />
+      )
     case 'error': {
       const { retryFile } = state
       return (

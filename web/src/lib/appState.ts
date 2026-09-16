@@ -1,9 +1,10 @@
-import type { AnalysisResult } from './schema'
+import type { HistoryEntry } from './history'
 
 /*
  * The whole analysis flow as one reducer:
  *
  *   idle | success | error  →  extracting  →  analyzing  →  success
+ *   idle | success | error  →  success      (a saved analysis opened from history)
  *   any state               →  error        (a file can be rejected before extraction)
  *   idle | success | error  →  idle         (reset)
  *
@@ -16,7 +17,12 @@ export type AppState =
   | { status: 'idle' }
   | { status: 'extracting'; fileName: string }
   | { status: 'analyzing'; fileName: string; pages: number }
-  | { status: 'success'; result: AnalysisResult }
+  | {
+      status: 'success'
+      entry: HistoryEntry
+      /** True when reopened from history rather than analysed just now. */
+      fromHistory: boolean
+    }
   | {
       status: 'error'
       message: string
@@ -28,7 +34,8 @@ export type AppState =
 export type AppAction =
   | { type: 'EXTRACTION_STARTED'; fileName: string }
   | { type: 'ANALYSIS_STARTED'; pages: number }
-  | { type: 'ANALYSIS_SUCCEEDED'; result: AnalysisResult }
+  | { type: 'ANALYSIS_SUCCEEDED'; entry: HistoryEntry }
+  | { type: 'HISTORY_ENTRY_OPENED'; entry: HistoryEntry }
   | { type: 'FAILED'; message: string; fileName: string | null; retryFile: File | null }
   | { type: 'RESET' }
 
@@ -54,7 +61,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'ANALYSIS_SUCCEEDED':
       if (state.status !== 'analyzing') throw invalidTransition(state, action)
-      return { status: 'success', result: action.result }
+      return { status: 'success', entry: action.entry, fromHistory: false }
+
+    case 'HISTORY_ENTRY_OPENED':
+      if (isBusy(state)) throw invalidTransition(state, action)
+      return { status: 'success', entry: action.entry, fromHistory: true }
 
     // Allowed from any state: a file can be rejected before extraction even starts.
     case 'FAILED':

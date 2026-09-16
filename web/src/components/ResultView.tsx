@@ -5,6 +5,7 @@ import {
   formatAmount,
   formatIsoDate,
   formatPages,
+  formatTimestamp,
   languageName,
   sortByDate,
 } from '@/lib/format'
@@ -14,6 +15,8 @@ import { primaryButton, secondaryButton } from './styles'
 
 export type ResultViewProps = {
   result: AnalysisResult
+  /** When the result was reopened from history: the moment it was originally saved. */
+  savedAt: string | null
 }
 
 type CopyStatus = 'idle' | 'copied' | 'failed'
@@ -67,7 +70,7 @@ function NameList({ label, names }: { label: string; names: string[] }) {
   )
 }
 
-export function ResultView({ result }: ResultViewProps) {
+export function ResultView({ result, savedAt }: ResultViewProps) {
   const { document: documentInfo, summary, keyPoints, entities, amounts, dates, keywords } = result
   const titleId = useId()
   const titleRef = useRef<HTMLHeadingElement>(null)
@@ -134,6 +137,13 @@ export function ResultView({ result }: ResultViewProps) {
             <dd className="mt-0.5 font-medium">{languageName(documentInfo.language)}</dd>
           </div>
         </dl>
+
+        {savedAt !== null && (
+          <p className="mt-5 text-sm text-ink-muted">
+            Zapisana analiza z {formatTimestamp(savedAt)}. Aby przeanalizować dokument ponownie,
+            wgraj go jeszcze raz.
+          </p>
+        )}
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <button type="button" onClick={() => downloadJson(result)} className={primaryButton}>
