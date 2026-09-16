@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { downloadJson, serializeResult } from '@/lib/exportJson'
+import { focusAndReveal } from '@/lib/focus'
 import {
   DOCUMENT_TYPE_LABELS,
   formatAmount,
@@ -74,6 +75,7 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
   const { document: documentInfo, summary, keyPoints, entities, amounts, dates, keywords } = result
   const titleId = useId()
   const titleRef = useRef<HTMLHeadingElement>(null)
+  const cardRef = useRef<HTMLElement>(null)
   // Remembers which result the copy feedback belongs to, so it clears itself when a
   // different result is shown — derived during render, no effect needed.
   const [copied, setCopied] = useState<{ result: AnalysisResult; status: CopyStatus } | null>(null)
@@ -82,7 +84,7 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
 
   // A new result replaces the status area: take keyboard and screen-reader focus to it.
   useEffect(() => {
-    titleRef.current?.focus()
+    focusAndReveal(titleRef.current, cardRef.current)
   }, [result])
 
   const copyJson = async (): Promise<void> => {
@@ -98,11 +100,12 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
 
   return (
     <article
+      ref={cardRef}
       aria-labelledby={titleId}
-      className="rounded-lg border border-rule bg-sheet shadow-[0_1px_0_rgb(27_34_51/0.04),0_16px_40px_-24px_rgb(27_34_51/0.35)]"
+      className="scroll-mt-4 rounded-lg border border-rule bg-sheet shadow-[0_1px_0_rgb(27_34_51/0.04),0_16px_40px_-24px_rgb(27_34_51/0.35)]"
     >
       <header className="border-b border-rule px-6 pt-6 pb-6 sm:px-8 sm:pt-8">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
           <div className="min-w-0">
             <p className="text-sm break-words text-ink-muted">{documentInfo.fileName}</p>
             <h2
@@ -200,7 +203,7 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
               <tbody>
                 {amounts.map((amount, index) => (
                   <tr key={index} className="border-b border-rule/70 last:border-b-0">
-                    <td className="py-2 pr-4 text-right align-top font-semibold whitespace-nowrap tabular-nums">
+                    <td className="py-2 pr-4 text-right align-top font-semibold whitespace-nowrap">
                       {formatAmount(amount.value, amount.currency)}
                     </td>
                     <td className="py-2 align-top">{amount.context}</td>
@@ -221,7 +224,7 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
                   key={`${index}-${mention.date}`}
                   className="grid gap-0.5 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-4"
                 >
-                  <time dateTime={mention.date} className="font-semibold tabular-nums">
+                  <time dateTime={mention.date} className="font-semibold">
                     {formatIsoDate(mention.date)}
                   </time>
                   <span>{mention.context}</span>

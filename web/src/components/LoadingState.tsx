@@ -1,3 +1,6 @@
+import { useEffect, useRef } from 'react'
+import { focusAndReveal } from '@/lib/focus'
+
 export type LoadingStateProps = {
   stage: 'extracting' | 'analyzing'
   fileName: string
@@ -66,10 +69,24 @@ function Step(props: { number: number; status: StepStatus; label: string; detail
 /** The two real steps of the pipeline, in order, with the one in progress marked. */
 export function LoadingState({ stage, fileName, pages }: LoadingStateProps) {
   const extracted = stage === 'analyzing'
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+
+  // The upload button that had focus is now disabled: hand focus to the progress instead,
+  // once, when processing starts (the component stays mounted across both steps).
+  useEffect(() => {
+    focusAndReveal(headingRef.current, sectionRef.current)
+  }, [])
 
   return (
-    <section role="status" className="rounded-lg border border-rule bg-sheet p-6 sm:p-8">
-      <h2 className="text-lg font-semibold">Trwa analiza dokumentu</h2>
+    <section
+      ref={sectionRef}
+      role="status"
+      className="scroll-mt-4 rounded-lg border border-rule bg-sheet p-6 sm:p-8"
+    >
+      <h2 ref={headingRef} tabIndex={-1} className="text-lg font-semibold">
+        Trwa analiza dokumentu
+      </h2>
       <p className="mt-1 text-sm break-words text-ink-muted">Plik: {fileName}</p>
 
       <ol className="mt-6 space-y-5">

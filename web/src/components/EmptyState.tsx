@@ -16,7 +16,7 @@ export function EmptyState() {
   return (
     <section
       aria-labelledby={headingId}
-      className="rounded-lg border-2 border-dashed border-ink/15 p-6 sm:p-8"
+      className="rounded-lg border border-ink/10 bg-sheet/40 p-6 sm:p-8"
     >
       <h2 id={headingId} className="text-lg font-semibold">
         Tu pojawi się wynik analizy

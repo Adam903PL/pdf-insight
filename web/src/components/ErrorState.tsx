@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { focusAndReveal } from '@/lib/focus'
 import { primaryButton, secondaryButton } from './styles'
 
 export type ErrorStateProps = {
@@ -12,14 +13,19 @@ export type ErrorStateProps = {
 
 export function ErrorState({ message, fileName, onRetry, onChooseFile }: ErrorStateProps) {
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
 
   // Move focus here so keyboard and screen-reader users land next to the actions.
   useEffect(() => {
-    headingRef.current?.focus()
+    focusAndReveal(headingRef.current, sectionRef.current)
   }, [message])
 
   return (
-    <section role="alert" className="rounded-lg border border-alert/35 bg-alert-soft p-6 sm:p-8">
+    <section
+      ref={sectionRef}
+      role="alert"
+      className="scroll-mt-4 rounded-lg border border-alert/35 bg-alert-soft p-6 sm:p-8"
+    >
       <h2 ref={headingRef} tabIndex={-1} className="text-lg font-semibold text-alert">
         Nie udało się przeanalizować dokumentu
       </h2>

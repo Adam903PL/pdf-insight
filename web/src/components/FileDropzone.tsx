@@ -109,7 +109,9 @@ export function FileDropzone({ onFilesSelected, disabled = false, inputRef }: Fi
         >
           Wybierz plik PDF
         </button>
-        <p className="mt-4 text-sm text-ink-muted">Dokument z zaznaczalnym tekstem, do 10 MB</p>
+        <p className="mt-4 text-sm text-ink-muted">
+          Dokument z zaznaczalnym tekstem, <span className="whitespace-nowrap">do 10 MB</span>
+        </p>
 
         <input
           ref={inputRef}
