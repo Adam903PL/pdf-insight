@@ -1,70 +1,87 @@
 import { useReducer } from 'react'
+import { analyze, ApiError } from '@/api/analyze'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { FileDropzone } from '@/components/FileDropzone'
-import { HistoryPanel } from '@/components/HistoryPanel'
 import { LoadingState } from '@/components/LoadingState'
 import { ResultView } from '@/components/ResultView'
-import type { HistoryEntry } from '@/lib/history'
-import type { AnalysisResult } from '@/lib/schema'
+import { appReducer, INITIAL_STATE, isBusy, type AppState } from '@/lib/appState'
+import { extractText, PdfExtractionError } from '@/lib/pdf'
 
-type AppState =
-  | { status: 'idle' }
-  | { status: 'extracting'; fileName: string }
-  | { status: 'analyzing'; fileName: string; pages: number }
-  | { status: 'success'; result: AnalysisResult }
-  | { status: 'error'; message: string }
-
-type AppAction =
-  | { type: 'EXTRACTION_STARTED'; fileName: string }
-  | { type: 'ANALYSIS_STARTED'; pages: number }
-  | { type: 'ANALYSIS_SUCCEEDED'; result: AnalysisResult }
-  | { type: 'FAILED'; message: string }
-  | { type: 'RESET' }
-
-const INITIAL_STATE: AppState = { status: 'idle' }
-
-function appReducer(_state: AppState, _action: AppAction): AppState {
-  // TODO: transitions idle → extracting → analyzing → success | error (+ RESET).
-  throw new Error('Not implemented')
-}
+const UNEXPECTED_ERROR =
+  'Wystąpił nieoczekiwany błąd. Spróbuj ponownie, a jeśli problem się powtórzy, odśwież stronę.'
 
 export function App() {
-  const [state] = useReducer(appReducer, INITIAL_STATE)
-  // TODO: initialise from loadHistory().
-  const history: HistoryEntry[] = []
-  const isBusy = state.status === 'extracting' || state.status === 'analyzing'
+  const [state, dispatch] = useReducer(appReducer, INITIAL_STATE)
+  const busy = isBusy(state)
 
-  const handleFileSelected = (_file: File): void => {
-    // TODO: extractText → analyze → saveHistoryEntry, dispatching AppAction at each step.
-    throw new Error('Not implemented')
+  async function analyzeFile(file: File): Promise<void> {
+    dispatch({ type: 'EXTRACTION_STARTED', fileName: file.name })
+
+    try {
+      const { text, pages } = await extractText(file)
+      dispatch({ type: 'ANALYSIS_STARTED', pages })
+
+      const result = await analyze({ fileName: file.name, pages, text })
+      dispatch({ type: 'ANALYSIS_SUCCEEDED', result })
+    } catch (error) {
+      if (error instanceof PdfExtractionError) {
+        dispatch({ type: 'FAILED', message: error.message, fileName: file.name, retryFile: null })
+        return
+      }
+      if (error instanceof ApiError) {
+        const retryFile = error.retryable ? file : null
+        dispatch({ type: 'FAILED', message: error.message, fileName: file.name, retryFile })
+        return
+      }
+
+      dispatch({ type: 'FAILED', message: UNEXPECTED_ERROR, fileName: file.name, retryFile: file })
+      // Anything else is a bug: show a usable screen, but keep the error loud in the console.
+      throw error
+    }
   }
 
-  const handleHistorySelect = (_entry: HistoryEntry): void => {
-    // TODO: show a saved result without re-analysing.
-    throw new Error('Not implemented')
+  const startAnalysis = (file: File): void => {
+    void analyzeFile(file)
   }
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-6">
-      <h1 className="text-2xl font-semibold">PDF Insight</h1>
-      <FileDropzone onFileSelected={handleFileSelected} disabled={isBusy} />
-      <StatusView state={state} />
-      <HistoryPanel entries={history} onSelect={handleHistorySelect} />
+    <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-12 lg:py-14">
+      <div className="space-y-6">
+        <header>
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">PDF Insight</h1>
+          <p className="mt-3 text-ink-muted">
+            Wgraj dokument PDF, a otrzymasz jego streszczenie i najważniejsze dane. Wynik możesz
+            pobrać jako plik JSON.
+          </p>
+        </header>
+        <FileDropzone onFileSelected={startAnalysis} disabled={busy} />
+      </div>
+
+      <StatusView state={state} onRetry={startAnalysis} />
     </main>
   )
 }
 
-function StatusView({ state }: { state: AppState }) {
+function StatusView({ state, onRetry }: { state: AppState; onRetry: (file: File) => void }) {
   switch (state.status) {
     case 'idle':
       return <EmptyState />
     case 'extracting':
+      return <LoadingState stage="extracting" fileName={state.fileName} pages={null} />
     case 'analyzing':
-      return <LoadingState stage={state.status} />
+      return <LoadingState stage="analyzing" fileName={state.fileName} pages={state.pages} />
     case 'success':
       return <ResultView result={state.result} />
-    case 'error':
-      return <ErrorState message={state.message} />
+    case 'error': {
+      const { retryFile } = state
+      return (
+        <ErrorState
+          message={state.message}
+          fileName={state.fileName}
+          onRetry={retryFile ? () => onRetry(retryFile) : undefined}
+        />
+      )
+    }
   }
 }
