@@ -8,24 +8,32 @@ export type RateLimitOptions = {
   max: number
 }
 
-/** Hit timestamps (epoch ms) per client key, newest last. */
+/** Hit timestamps (epoch ms) per client key, oldest first. */
 export type RateLimitStore = Map<string, number[]>
 
 /** Used when no proxy header identifies the client — everyone shares one bucket. */
 const UNKNOWN_CLIENT = 'unknown'
 
 /**
- * Railway terminates TLS at its proxy, so the socket address is always the proxy.
- * `x-forwarded-for` is a comma-separated chain and the first entry is the original
- * client. Falls back to `cf-connecting-ip`, then to a shared bucket — never to the
- * socket address, which would put every request behind the proxy in one bucket
- * without saying so.
+ * Upper bound on distinct clients tracked at once. Keys are client IPs, and an
+ * attacker holding many addresses (an IPv6 range, a botnet) could otherwise grow the
+ * Map — and the per-request sweep over it — without limit. At most `max` timestamps
+ * per key keeps a full store at a few MB and one sweep at ~10k entries.
+ */
+const MAX_TRACKED_CLIENTS = 10_000
+
+/**
+ * Railway terminates TLS at its edge, so the socket address is always the proxy.
+ * The edge replaces any client-supplied `x-forwarded-for` with the real client IP
+ * (verified against production: spoofed values landed in the caller's own bucket).
+ * The LAST entry is read, not the first, so this stays correct if a proxy ever
+ * appends instead of replacing — the leftmost entry is the one a client can forge.
+ * Falls back to `cf-connecting-ip`, then to a shared bucket.
  */
 function clientKey(c: Context): string {
-  const forwardedFor = c.req.header('x-forwarded-for')
-  const firstHop = forwardedFor?.split(',')[0]?.trim()
-  if (firstHop !== undefined && firstHop !== '') {
-    return firstHop
+  const lastHop = c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim()
+  if (lastHop !== undefined && lastHop !== '') {
+    return lastHop
   }
 
   const cloudflareIp = c.req.header('cf-connecting-ip')?.trim()
@@ -39,11 +47,16 @@ function clientKey(c: Context): string {
 /** Drops hits that fell out of the window, and keys left with none. */
 function prune(store: RateLimitStore, cutoff: number): void {
   for (const [key, hits] of store) {
-    const recent = hits.filter((hit) => hit > cutoff)
-    if (recent.length === 0) {
+    // Hits are appended in time order, so if the oldest is still live, all are —
+    // the common case costs one comparison and no allocation.
+    if ((hits[0] ?? cutoff) > cutoff) {
+      continue
+    }
+    const firstLive = hits.findIndex((hit) => hit > cutoff)
+    if (firstLive === -1) {
       store.delete(key)
     } else {
-      store.set(key, recent)
+      store.set(key, hits.slice(firstLive))
     }
   }
 }
@@ -86,6 +99,15 @@ export function rateLimit(
         },
         429,
       )
+    }
+
+    // Evict the longest-tracked client rather than refusing new ones: failing closed
+    // would let anyone with enough addresses lock every new visitor out.
+    if (!store.has(key) && store.size >= MAX_TRACKED_CLIENTS) {
+      const oldestKey = store.keys().next().value
+      if (oldestKey !== undefined) {
+        store.delete(oldestKey)
+      }
     }
 
     hits.push(now)
