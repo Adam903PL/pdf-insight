@@ -15,7 +15,7 @@ export const GEMINI_MODEL = 'gemini-3-flash-preview'
  */
 export const GEMINI_TIMEOUT_MS = 25_000
 
-/** Model output failed AnalysisResultSchema twice (original + corrected retry). */
+/** Model output failed JSON parsing or schema validation twice. */
 export class AiValidationError extends Error {
   readonly issues: string[]
 
@@ -89,7 +89,7 @@ function correctionTurn(issues: string[]): Content {
     role: 'user',
     parts: [
       {
-        text: `Twoja poprzednia odpowiedź nie przeszła walidacji schematu. Niezgodne pola:\n${list}\n\nPopraw wyłącznie te pola i zwróć ponownie kompletny, poprawny JSON zgodny ze schematem. Nie zmieniaj pozostałych wartości i nie dopisuj danych, których nie ma w dokumencie. Powyższe zasady bezpieczeństwa nadal obowiązują.`,
+        text: `Twoja poprzednia odpowiedź nie przeszła walidacji JSON lub schematu. Wykryte błędy:\n${list}\n\nPopraw składnię JSON lub wskazane pola i zwróć ponownie kompletny, poprawny JSON zgodny ze schematem. Nie zmieniaj pozostałych wartości i nie dopisuj danych, których nie ma w dokumencie. Powyższe zasady bezpieczeństwa nadal obowiązują.`,
       },
     ],
   }
@@ -146,12 +146,23 @@ function redact(message: string): string {
   return message.replaceAll(apiKey, '<redacted>')
 }
 
-function parseJson(raw: string): unknown {
+type OutputValidation =
+  { success: true; data: AnalysisResult } | { success: false; issues: string[] }
+
+/** Syntax errors and schema misses share the same single correction attempt. */
+function validateOutput(raw: string): OutputValidation {
+  let value: unknown
   try {
-    return JSON.parse(raw)
+    value = JSON.parse(raw)
   } catch {
-    throw new AiUpstreamError('Gemini returned a body that is not valid JSON')
+    // Do not include raw model output in logs or validation diagnostics.
+    return { success: false, issues: ['(root): response is not valid JSON'] }
   }
+
+  const parsed = AnalysisResultSchema.safeParse(value)
+  return parsed.success
+    ? { success: true, data: parsed.data }
+    : { success: false, issues: describeIssues(parsed.error) }
 }
 
 /**
@@ -159,7 +170,7 @@ function parseJson(raw: string): unknown {
  * AnalysisResultSchema. Reads GEMINI_API_KEY from the environment — the key
  * never leaves the server.
  *
- * On a schema miss it retries exactly once, telling the model which fields failed.
+ * On invalid JSON or a schema miss it retries exactly once with validation feedback.
  * `document.fileName` and `document.pages` are always overwritten with the values
  * from the request: those are facts, not something the model may invent.
  */
@@ -173,7 +184,7 @@ export async function analyzeDocument(
   const contents: Content[] = [documentTurn(text)]
 
   const firstRaw = await callGemini(contents, signal)
-  const first = AnalysisResultSchema.safeParse(parseJson(firstRaw))
+  const first = validateOutput(firstRaw)
 
   if (first.success) {
     logger.info('gemini analysis completed', {
@@ -187,7 +198,7 @@ export async function analyzeDocument(
     return { ...first.data, document: { ...first.data.document, fileName, pages } }
   }
 
-  const firstIssues = describeIssues(first.error)
+  const firstIssues = first.issues
   logger.warn('gemini response failed validation, retrying once', {
     model: GEMINI_MODEL,
     fileName,
@@ -199,10 +210,10 @@ export async function analyzeDocument(
   contents.push({ role: 'model', parts: [{ text: firstRaw }] }, correctionTurn(firstIssues))
 
   const secondRaw = await callGemini(contents, signal)
-  const second = AnalysisResultSchema.safeParse(parseJson(secondRaw))
+  const second = validateOutput(secondRaw)
 
   if (!second.success) {
-    const secondIssues = describeIssues(second.error)
+    const secondIssues = second.issues
     logger.error('gemini response failed validation after retry', {
       model: GEMINI_MODEL,
       fileName,

@@ -1,7 +1,6 @@
 /*
- * The one module allowed to touch `console` — ESLint's `no-console` is an error
- * everywhere else, but Railway collects stdout/stderr, so logging has to go
- * somewhere. One JSON object per line keeps the Railway log viewer filterable.
+ * Railway collects stdout. One JSON object per line keeps its log viewer
+ * filterable without exceptions to the project's no-console rule.
  *
  * NEVER pass document text, the API key or full prompts in here. Log facts
  * *about* them instead: text length, file name, duration, error code, retry flag.
@@ -13,8 +12,7 @@ export type LogFields = Record<string, string | number | boolean | null | undefi
 
 function write(level: LogLevel, message: string, fields: LogFields): void {
   const line = JSON.stringify({ time: new Date().toISOString(), level, message, ...fields })
-  // eslint-disable-next-line no-console -- single sanctioned console call, see module comment
-  console[level](line)
+  process.stdout.write(`${line}\n`)
 }
 
 export const logger = {
