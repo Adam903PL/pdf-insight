@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import type { ZodError } from 'zod'
 import { corsMiddleware } from './cors.js'
 import { AiTimeoutError, AiUpstreamError, AiValidationError, analyzeDocument } from './gemini.js'
@@ -11,6 +12,32 @@ const app = new Hono()
 
 app.use('/api/*', corsMiddleware())
 app.use('/api/*', rateLimit({ windowMs: 10 * 60_000, max: 10 }))
+
+/*
+ * Refuse oversized bodies before c.req.json() buffers them into memory. Sized so a
+ * valid document is never refused: one text character is at most 6 bytes of JSON
+ * (a \uXXXX escape), plus headroom for fileName and the envelope.
+ */
+const MAX_BODY_BYTES = MAX_TEXT_LENGTH * 6 + 64 * 1024
+
+app.use(
+  '/api/analyze',
+  bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: (c) => {
+      logger.warn('analyze request rejected', {
+        reason: 'body_too_large',
+        maxBytes: MAX_BODY_BYTES,
+      })
+      return c.json(
+        {
+          error: `Żądanie jest zbyt duże. Tekst dokumentu może mieć maksymalnie ${MAX_TEXT_LENGTH} znaków.`,
+        },
+        413,
+      )
+    },
+  }),
+)
 
 app.get('/health', (c) => c.json({ ok: true }))
 
