@@ -24,14 +24,16 @@
 
   --animate-stamp: stamp 280ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 
+  /* Animates `scale` only: the tilt comes from Tailwind's `rotate` utility, which uses
+     the separate `rotate` property, so the two compose instead of overriding. */
   @keyframes stamp {
     from {
       opacity: 0;
-      transform: rotate(-4deg) scale(1.35);
+      scale: 1.35;
     }
     to {
       opacity: 1;
-      transform: rotate(-4deg) scale(1);
+      scale: 1;
     }
   }
 }
