@@ -6,6 +6,7 @@ import { FileDropzone } from '@/components/FileDropzone'
 import { HistoryPanel } from '@/components/HistoryPanel'
 import { LoadingState } from '@/components/LoadingState'
 import { ResultView } from '@/components/ResultView'
+import { WelcomeNotice } from '@/components/WelcomeNotice'
 import { appReducer, INITIAL_STATE, isBusy, type AppState } from '@/lib/appState'
 import { validateSelection } from '@/lib/fileValidation'
 import {
@@ -129,6 +130,8 @@ export function App() {
           onClear={() => setHistory(clearHistory())}
         />
       </div>
+
+      <WelcomeNotice />
     </main>
   )
 }
