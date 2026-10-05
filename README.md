@@ -46,6 +46,8 @@ PDF → pdf.js w przeglądarce → tekst + nazwa pliku + liczba stron
 - Gemini dostaje schemat odpowiedzi i instrukcję traktowania treści jako danych. Niepoprawna składnia
   JSON lub niezgodność ze schematem uruchamia **jedną próbę korekty**. Kolejny błąd daje HTTP 502.
   Obie próby mają wspólny budżet 25 sekund; frontend przerywa oczekiwanie po 35 sekundach.
+- Wyczerpane środki lub limit na koncie Gemini (402/429 od dostawcy) dają HTTP 503 z komunikatem,
+  że to ograniczenie konta API, a nie błąd aplikacji.
 - Brak bazy danych: historia zawiera wyniki, a nie pliki PDF, i jest przechowywana w `localStorage`.
 
 ```text

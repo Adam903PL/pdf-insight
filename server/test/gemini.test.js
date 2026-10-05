@@ -4,7 +4,7 @@ import { test } from 'node:test'
 // Never load .env or call the provider in these tests. Only HTTP is substituted;
 // the real SDK, JSON parser, Zod contract and analysis retry flow run together.
 process.env.GEMINI_API_KEY = 'test-placeholder'
-const { analyzeDocument, AiValidationError, AiUpstreamError, AiTimeoutError } =
+const { analyzeDocument, AiValidationError, AiUpstreamError, AiTimeoutError, AiQuotaError } =
   await import('../dist/gemini.js')
 
 const valid = {
@@ -94,6 +94,30 @@ test('does not turn a provider rejection into an output correction retry', async
   await assert.rejects(analyzeDocument('Document text', 'actual.pdf', 2), AiUpstreamError)
   assert.equal(fetchMock.mock.callCount(), 1)
 })
+
+for (const status of [402, 429]) {
+  test(`a ${status} RESOURCE_EXHAUSTED becomes a quota error, with no retry`, async (t) => {
+    const fetchMock = t.mock.method(
+      globalThis,
+      'fetch',
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: status,
+              message: 'Your prepayment credits are depleted.',
+              status: 'RESOURCE_EXHAUSTED',
+            },
+          }),
+          { status, headers: { 'Content-Type': 'application/json' } },
+        ),
+    )
+    const error = await analyzeDocument('Document text', 'actual.pdf', 2).catch((e) => e)
+    assert.ok(error instanceof AiQuotaError)
+    assert.equal(error.status, status)
+    assert.equal(fetchMock.mock.callCount(), 1)
+  })
+}
 
 test('the correction shares the original timeout budget', async (t) => {
   const controller = new AbortController()

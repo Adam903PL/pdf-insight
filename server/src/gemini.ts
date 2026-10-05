@@ -45,6 +45,20 @@ export class AiUpstreamError extends Error {
   }
 }
 
+/**
+ * Gemini refused on account limits, not on this request: prepaid credits depleted (402)
+ * or quota exhausted (429, RESOURCE_EXHAUSTED). Not fixable from the app.
+ */
+export class AiQuotaError extends AiUpstreamError {
+  constructor(message: string, status: number) {
+    super(message, status)
+    this.name = 'AiQuotaError'
+  }
+}
+
+/** HTTP statuses Gemini uses when the API account itself has run out of credits or quota. */
+const QUOTA_STATUSES = new Set([402, 429])
+
 // Typed as string (not string | undefined) so redact() below still sees a string
 // inside its closure — TS does not carry the guard's narrowing that far.
 const apiKey: string = process.env.GEMINI_API_KEY ?? ''
@@ -130,6 +144,9 @@ async function callGemini(contents: Content[], signal: AbortSignal): Promise<str
     }
     if (error instanceof ApiError) {
       // The SDK message stays server-side; the route maps this to a generic 5xx.
+      if (QUOTA_STATUSES.has(error.status)) {
+        throw new AiQuotaError(redact(error.message), error.status)
+      }
       throw new AiUpstreamError(redact(error.message), error.status)
     }
     throw new AiUpstreamError(

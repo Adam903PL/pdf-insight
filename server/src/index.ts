@@ -3,7 +3,13 @@ import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import type { ZodError } from 'zod'
 import { corsMiddleware } from './cors.js'
-import { AiTimeoutError, AiUpstreamError, AiValidationError, analyzeDocument } from './gemini.js'
+import {
+  AiQuotaError,
+  AiTimeoutError,
+  AiUpstreamError,
+  AiValidationError,
+  analyzeDocument,
+} from './gemini.js'
 import { logger } from './logger.js'
 import { rateLimit } from './rateLimit.js'
 import { AnalyzeRequestSchema, MAX_TEXT_LENGTH } from './schema.js'
@@ -119,6 +125,25 @@ app.post('/api/analyze', async (c) => {
             'Analiza trwała zbyt długo i została przerwana. Spróbuj ponownie lub użyj krótszego dokumentu.',
         },
         504,
+      )
+    }
+
+    // Checked before the generic branch: AiQuotaError is also an AiUpstreamError.
+    if (error instanceof AiQuotaError) {
+      logger.error('analyze request failed', {
+        reason: 'ai_quota',
+        status: error.status ?? null,
+        fileName,
+        textLength: text.length,
+        durationMs,
+        detail: error.message,
+      })
+      return c.json(
+        {
+          error:
+            'Wyczerpał się limit tokenów na koncie Gemini API, z którego korzysta ta aplikacja. To ograniczenie konta u dostawcy AI, a nie błąd aplikacji — analiza zadziała ponownie po odnowieniu limitu lub doładowaniu konta.',
+        },
+        503,
       )
     }
 
