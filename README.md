@@ -29,35 +29,40 @@ lub usunąć przyciskiem „Wyczyść historię”. Dokument musi mieć warstwę
 ```text
 PDF → pdf.js w przeglądarce → tekst + nazwa pliku + liczba stron
     → POST /api/analyze na Railway → walidacja żądania (Zod)
-    → Google Gemini → walidacja JSON i schematu (Zod)
+    → Google Gemini (zapasowo OpenRouter) → walidacja JSON i schematu (Zod)
     → walidacja we frontendzie → widok wyników / eksport / localStorage
 ```
 
 - **PDF pozostaje w przeglądarce.** Wyodrębniony tekst, nazwa pliku i liczba stron trafiają do
-  backendu; tekst jest przekazywany do Google Gemini. Informacja o tym jest widoczna przed uploadem.
+  backendu; tekst jest przekazywany do Google Gemini, a gdy Gemini jest niedostępny — do modelu
+  `openai/gpt-4.1-nano` przez OpenRouter. Informacja o tym jest widoczna przed uploadem.
 - **Dwa niezależne pakiety npm:** `web/` i `server/`, bez pakietu głównego i workspaces.
-- **GitHub Pages hostuje frontend**, a **Railway backend**. Klucz Gemini jest wyłącznie po stronie serwera.
+- **GitHub Pages hostuje frontend**, a **Railway backend**. Klucze Gemini i OpenRouter są wyłącznie po stronie serwera.
 - Stan interfejsu obsługuje `useReducer`: pusty → odczyt → analiza → wynik lub błąd.
   Jednoekranowa aplikacja nie wymaga routera.
 - pdf.js ładuje się dopiero po wyborze pliku. Worker jest importowany przez `?url`, dzięki czemu
   działa pod ścieżką `/pdf-insight/` na GitHub Pages.
 - Schemat wyniku jest celowo skopiowany do `web/src/lib/schema.ts` i `server/src/schema.ts`.
   Zmiany kontraktu wymagają aktualizacji obu kopii. Część walidująca żądanie istnieje tylko na serwerze.
-- Gemini dostaje schemat odpowiedzi i instrukcję traktowania treści jako danych. Niepoprawna składnia
+- Model dostaje schemat odpowiedzi i instrukcję traktowania treści jako danych. Niepoprawna składnia
   JSON lub niezgodność ze schematem uruchamia **jedną próbę korekty**. Kolejny błąd daje HTTP 502.
-  Obie próby mają wspólny budżet 25 sekund; frontend przerywa oczekiwanie po 35 sekundach.
-  Model działa z `thinkingLevel: low` — domyślne `high` przekraczało ten budżet nawet dla
+  Gemini działa z `thinkingLevel: low` — domyślne `high` przekraczało budżet czasu nawet dla
   jednostronicowej faktury.
-- Wyczerpane środki lub limit na koncie Gemini (402/429 od dostawcy) dają HTTP 503 z komunikatem,
-  że to ograniczenie konta API, a nie błąd aplikacji.
+- **Fallback na OpenRouter:** gdy Gemini przekroczy swoje 15 sekund, zwróci błąd 5xx albo wyczerpany
+  limit, analizę przejmuje `openai/gpt-4.1-nano` przez OpenRouter (ścisły JSON Schema wyprowadzony
+  ze schematu Gemini, ta sama walidacja i jedna korekta). Cała analiza mieści się w 27 sekundach;
+  frontend przerywa oczekiwanie po 35 sekundach. Niepoprawna odpowiedź Gemini nie trafia do
+  fallbacku — brief dopuszcza jedną korektę, potem błąd.
+- Wyczerpane środki lub limit u dostawcy AI (402/429) dają HTTP 503 z komunikatem, że to
+  ograniczenie konta API, a nie błąd aplikacji.
 - Brak bazy danych: historia zawiera wyniki, a nie pliki PDF, i jest przechowywana w `localStorage`.
 
 ```text
 web/src/components/   formularz wgrywania, stany UI, wynik i historia
 web/src/lib/          ekstrakcja PDF, schemat, historia, formatowanie i eksport
 web/src/api/          klient API i obsługa błędów
-server/src/           endpointy Hono, Gemini, schemat, CORS i limit zapytań
-server/test/          testy integracji klienta Gemini z podstawionym transportem HTTP
+server/src/           endpointy Hono, Gemini, fallback OpenRouter, schemat, CORS i limit zapytań
+server/test/          testy klienta Gemini i fallbacku OpenRouter z podstawionym transportem HTTP
 ```
 
 ## Stack
@@ -89,6 +94,7 @@ Skopiuj `server/.env.example` do `server/.env` i ustaw:
 
 ```dotenv
 GEMINI_API_KEY=twoj_klucz_z_Google_AI_Studio
+OPENROUTER_API_KEY=twoj_klucz_z_openrouter.ai
 ALLOWED_ORIGIN=http://localhost:5173
 PORT=3000
 ```
@@ -117,14 +123,15 @@ Nie uruchamiaj poleceń npm w katalogu głównym — nie ma tam `package.json`.
 
 ## Zmienne środowiskowe
 
-| Miejsce                             | Zmienna          | Znaczenie                                                                          |
-| ----------------------------------- | ---------------- | ---------------------------------------------------------------------------------- |
-| `server/.env` / Railway             | `GEMINI_API_KEY` | Sekret z Google AI Studio; nigdy nie trafia do `web/`                              |
-| `server/.env` / Railway             | `ALLOWED_ORIGIN` | Jeden origin; lokalnie `http://localhost:5173`, demo `https://adam903pl.github.io` |
-| `server/.env` / Railway             | `PORT`           | Lokalnie domyślnie 3000; Railway dostarcza port procesu                            |
-| `web/.env` / zmienna GitHub Actions | `VITE_API_URL`   | Publiczny adres backendu, wstawiany podczas kompilacji                             |
+| Miejsce                             | Zmienna              | Znaczenie                                                                          |
+| ----------------------------------- | -------------------- | ---------------------------------------------------------------------------------- |
+| `server/.env` / Railway             | `GEMINI_API_KEY`     | Sekret z Google AI Studio; nigdy nie trafia do `web/`                              |
+| `server/.env` / Railway             | `OPENROUTER_API_KEY` | Sekret z openrouter.ai dla modelu zapasowego; nigdy nie trafia do `web/`           |
+| `server/.env` / Railway             | `ALLOWED_ORIGIN`     | Jeden origin; lokalnie `http://localhost:5173`, demo `https://adam903pl.github.io` |
+| `server/.env` / Railway             | `PORT`               | Lokalnie domyślnie 3000; Railway dostarcza port procesu                            |
+| `web/.env` / zmienna GitHub Actions | `VITE_API_URL`       | Publiczny adres backendu, wstawiany podczas kompilacji                             |
 
-Po zmianie `VITE_API_URL` trzeba ponownie zbudować frontend. Brak klucza Gemini albo brak lub
+Po zmianie `VITE_API_URL` trzeba ponownie zbudować frontend. Brak klucza Gemini lub OpenRouter albo brak lub
 niepoprawna wartość `ALLOWED_ORIGIN` zatrzymuje start backendu z komunikatem diagnostycznym.
 
 ## Wdrożenie
@@ -141,17 +148,17 @@ To publiczna zmienna, nie sekret. Przy zmianie nazwy repozytorium zmień też `b
 `web/vite.config.ts` (obecnie `/pdf-insight/`).
 
 **Backend:** Railway korzysta z gałęzi `main` tego repozytorium, katalogu głównego usługi `server`
-i healthchecka `/health`. Build: `npm run build`, start: `npm start`. Ustaw `GEMINI_API_KEY`
-oraz `ALLOWED_ORIGIN=https://adam903pl.github.io`. Backend jest sprawdzany lokalnie przed wysłaniem;
+i healthchecka `/health`. Build: `npm run build`, start: `npm start`. Ustaw `GEMINI_API_KEY`,
+`OPENROUTER_API_KEY` oraz `ALLOWED_ORIGIN=https://adam903pl.github.io`. Backend jest sprawdzany lokalnie przed wysłaniem;
 nie ma osobnego CI dla `server/`.
 
 Demo powinno pozostać dostępne co najmniej 14 dni od oddania. Wymaga to utrzymania aktywnej usługi
-Railway oraz działającego klucza i dostępnej kwoty zapytań Gemini.
+Railway oraz działających kluczy i dostępnej kwoty zapytań Gemini lub środków na OpenRouter.
 
 ## Bezpieczeństwo
 
 - Pliki `.env` są ignorowane przez Git; repozytorium zawiera tylko `.env.example`.
-- Klucz Gemini nie trafia do przeglądarki. Nie dodawaj sekretów z prefiksem `VITE_`.
+- Klucze Gemini i OpenRouter nie trafiają do przeglądarki. Nie dodawaj sekretów z prefiksem `VITE_`.
 - CORS na `/api/*` jest ograniczony do jednego originu. `/health` celowo nie ma nagłówka CORS.
 - Serwer ogranicza żądania do 10 na 10 minut na IP, w ruchomym oknie. Magazyn limitu jest
   ograniczony do 10 tys. klientów. Identyfikacja IP uwzględnia zachowanie proxy Railway.
@@ -187,9 +194,10 @@ npm run typecheck
 npm test
 ```
 
-`npm test` backendu najpierw buduje kod. Testy podstawiają transport HTTP i nie wymagają klucza ani
-połączenia z Gemini. Sprawdzają pierwszą poprawną odpowiedź, korektę błędnego JSON i schematu,
-wyczerpanie jednej próby, zaufane metadane, błąd dostawcy i wspólny budżet czasu.
+`npm test` backendu najpierw buduje kod. Testy podstawiają transport HTTP i nie wymagają kluczy ani
+połączenia z Gemini czy OpenRouter. Sprawdzają pierwszą poprawną odpowiedź, korektę błędnego JSON
+i schematu, wyczerpanie jednej próby, zaufane metadane, błąd dostawcy, wspólny budżet czasu oraz
+przejście na OpenRouter przy niedostępności Gemini (i brak przejścia przy błędnej odpowiedzi).
 Frontend ma testy schematu, API, walidacji plików, ekstrakcji tekstu, reduktora, historii,
 formatowania i eksportu. `npm run format` w każdym pakiecie poprawia formatowanie.
 
@@ -206,7 +214,7 @@ Opis pracy z AI i wykonanych kontroli znajduje się w [AI_LOG.md](AI_LOG.md).
 - AI może błędnie rozpoznać informacje. Zod sprawdza strukturę, nie zgodność każdej wartości
   z dokumentem. Wymóg 3–5 zdań jest przekazany w instrukcji modelu, a nie liczony przez schemat;
   kody języka i waluty są sprawdzane pod kątem formatu, nie pełnego słownika ISO.
-- Czas zależy od pliku, urządzenia, sieci i Gemini; aplikacja nie gwarantuje wyniku w 30 sekund
+- Czas zależy od pliku, urządzenia, sieci i dostawcy AI; aplikacja nie gwarantuje wyniku w 30 sekund
   dla każdego dokumentu. Timeout, brak kwoty API lub awaria dostawcy kończą się komunikatem błędu.
 - Historia nie synchronizuje się między urządzeniami. Usunięcie danych witryny usuwa historię;
   zablokowana lub pełna pamięć przeglądarki ogranicza jej działanie.

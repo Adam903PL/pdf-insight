@@ -4,8 +4,9 @@ import { test } from 'node:test'
 // Never load .env or call the provider in these tests. Only HTTP is substituted;
 // the real SDK, JSON parser, Zod contract and analysis retry flow run together.
 process.env.GEMINI_API_KEY = 'test-placeholder'
-const { analyzeDocument, AiValidationError, AiUpstreamError, AiTimeoutError, AiQuotaError } =
-  await import('../dist/gemini.js')
+const { analyzeWithGemini } = await import('../dist/gemini.js')
+const { AiValidationError, AiUpstreamError, AiTimeoutError, AiQuotaError } =
+  await import('../dist/ai.js')
 
 const valid = {
   document: {
@@ -40,7 +41,7 @@ function provider(t, outputs) {
 
 test('returns a valid first response with trusted file metadata', async (t) => {
   const requests = provider(t, [JSON.stringify(valid)])
-  const result = await analyzeDocument('Document text', 'actual.pdf', 2)
+  const result = await analyzeWithGemini('Document text', 'actual.pdf', 2)
   assert.deepEqual(result, {
     ...valid,
     document: { ...valid.document, fileName: 'actual.pdf', pages: 2 },
@@ -50,13 +51,13 @@ test('returns a valid first response with trusted file metadata', async (t) => {
 
 test('asks for low thinking so the analysis fits the time budget', async (t) => {
   const requests = provider(t, [JSON.stringify(valid)])
-  await analyzeDocument('Document text', 'actual.pdf', 2)
+  await analyzeWithGemini('Document text', 'actual.pdf', 2)
   assert.equal(requests[0].generationConfig?.thinkingConfig?.thinkingLevel, 'LOW')
 })
 
 test('retries malformed JSON once and returns the corrected result', async (t) => {
   const requests = provider(t, ['{"summary":', JSON.stringify(valid)])
-  const result = await analyzeDocument('Document text', 'actual.pdf', 2)
+  const result = await analyzeWithGemini('Document text', 'actual.pdf', 2)
   assert.equal(result.summary, valid.summary)
   assert.equal(requests.length, 2)
   assert.match(JSON.stringify(requests[1].contents), /JSON/)
@@ -64,26 +65,26 @@ test('retries malformed JSON once and returns the corrected result', async (t) =
 
 test('two malformed responses become a validation error, with no third call', async (t) => {
   const requests = provider(t, ['not json', '{'])
-  await assert.rejects(analyzeDocument('Document text', 'actual.pdf', 2), AiValidationError)
+  await assert.rejects(analyzeWithGemini('Document text', 'actual.pdf', 2), AiValidationError)
   assert.equal(requests.length, 2)
 })
 
 test('retries schema errors and describes the invalid field', async (t) => {
   const requests = provider(t, [JSON.stringify({ ...valid, keyPoints: [] }), JSON.stringify(valid)])
-  await analyzeDocument('Document text', 'actual.pdf', 2)
+  await analyzeWithGemini('Document text', 'actual.pdf', 2)
   assert.equal(requests.length, 2)
   assert.match(JSON.stringify(requests[1].contents), /keyPoints/)
 })
 
 test('a malformed retry after a schema error is still a validation error', async (t) => {
   const requests = provider(t, [JSON.stringify({ ...valid, keyPoints: [] }), 'not json'])
-  await assert.rejects(analyzeDocument('Document text', 'actual.pdf', 2), AiValidationError)
+  await assert.rejects(analyzeWithGemini('Document text', 'actual.pdf', 2), AiValidationError)
   assert.equal(requests.length, 2)
 })
 
 test('a schema error after malformed JSON exhausts the same retry budget', async (t) => {
   const requests = provider(t, ['not json', JSON.stringify({ ...valid, keyPoints: [] })])
-  await assert.rejects(analyzeDocument('Document text', 'actual.pdf', 2), AiValidationError)
+  await assert.rejects(analyzeWithGemini('Document text', 'actual.pdf', 2), AiValidationError)
   assert.equal(requests.length, 2)
 })
 
@@ -97,7 +98,7 @@ test('does not turn a provider rejection into an output correction retry', async
         headers: { 'Content-Type': 'application/json' },
       }),
   )
-  await assert.rejects(analyzeDocument('Document text', 'actual.pdf', 2), AiUpstreamError)
+  await assert.rejects(analyzeWithGemini('Document text', 'actual.pdf', 2), AiUpstreamError)
   assert.equal(fetchMock.mock.callCount(), 1)
 })
 
@@ -118,7 +119,7 @@ for (const status of [402, 429]) {
           { status, headers: { 'Content-Type': 'application/json' } },
         ),
     )
-    const error = await analyzeDocument('Document text', 'actual.pdf', 2).catch((e) => e)
+    const error = await analyzeWithGemini('Document text', 'actual.pdf', 2).catch((e) => e)
     assert.ok(error instanceof AiQuotaError)
     assert.equal(error.status, status)
     assert.equal(fetchMock.mock.callCount(), 1)
@@ -140,7 +141,7 @@ test('the correction shares the original timeout budget', async (t) => {
     controller.abort()
     throw new DOMException('Aborted', 'AbortError')
   })
-  await assert.rejects(analyzeDocument('Document text', 'actual.pdf', 2), AiTimeoutError)
+  await assert.rejects(analyzeWithGemini('Document text', 'actual.pdf', 2), AiTimeoutError)
   assert.equal(calls, 2)
   assert.equal(timeout.mock.callCount(), 1)
 })

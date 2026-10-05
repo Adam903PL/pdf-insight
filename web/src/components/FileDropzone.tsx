@@ -130,8 +130,8 @@ export function FileDropzone({ onFilesSelected, disabled = false, inputRef }: Fi
           <circle cx="10" cy="6.25" r="1.1" fill="currentColor" />
         </svg>
         <span>
-          Tekst z pliku zostanie wysłany do usługi AI Google Gemini w celu analizy. Nie wgrywaj
-          dokumentów z danymi poufnymi.
+          Tekst z pliku zostanie wysłany do usługi AI Google Gemini (a gdy jest niedostępna — do
+          modelu OpenAI przez OpenRouter) w celu analizy. Nie wgrywaj dokumentów z danymi poufnymi.
         </span>
       </p>
     </div>

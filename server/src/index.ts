@@ -3,13 +3,8 @@ import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import type { ZodError } from 'zod'
 import { corsMiddleware } from './cors.js'
-import {
-  AiQuotaError,
-  AiTimeoutError,
-  AiUpstreamError,
-  AiValidationError,
-  analyzeDocument,
-} from './gemini.js'
+import { AiQuotaError, AiTimeoutError, AiUpstreamError, AiValidationError } from './ai.js'
+import { analyzeDocument } from './analysis.js'
 import { logger } from './logger.js'
 import { rateLimit } from './rateLimit.js'
 import { AnalyzeRequestSchema, MAX_TEXT_LENGTH } from './schema.js'
@@ -141,7 +136,7 @@ app.post('/api/analyze', async (c) => {
       return c.json(
         {
           error:
-            'Wyczerpał się limit tokenów na koncie Gemini API, z którego korzysta ta aplikacja. To ograniczenie konta u dostawcy AI, a nie błąd aplikacji — analiza zadziała ponownie po odnowieniu limitu lub doładowaniu konta.',
+            'Wyczerpał się limit tokenów na koncie API dostawcy AI, z którego korzysta ta aplikacja (Gemini, a zapasowo OpenRouter). To ograniczenie konta u dostawcy AI, a nie błąd aplikacji — analiza zadziała ponownie po odnowieniu limitu lub doładowaniu konta.',
         },
         503,
       )
