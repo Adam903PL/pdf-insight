@@ -1,4 +1,4 @@
-import { ApiError, GoogleGenAI, type Content } from '@google/genai'
+import { ApiError, GoogleGenAI, ThinkingLevel, type Content } from '@google/genai'
 import type { ZodError } from 'zod'
 import { analysisResponseSchema } from './geminiSchema.js'
 import { logger } from './logger.js'
@@ -14,6 +14,13 @@ export const GEMINI_MODEL = 'gemini-3-flash-preview'
  * two independent 25 s calls could otherwise add up to 50 s.
  */
 export const GEMINI_TIMEOUT_MS = 25_000
+
+/**
+ * Gemini 3 Flash thinks at "high" by default, which pushed even a one-page invoice
+ * past the 25 s budget while a longer document finished in 15 s — latency tracked
+ * thinking, not input length. Field extraction does not need deep reasoning.
+ */
+const THINKING_LEVEL = ThinkingLevel.LOW
 
 /** Model output failed JSON parsing or schema validation twice. */
 export class AiValidationError extends Error {
@@ -126,6 +133,7 @@ async function callGemini(contents: Content[], signal: AbortSignal): Promise<str
         responseMimeType: 'application/json',
         responseSchema: analysisResponseSchema,
         temperature: 0.2,
+        thinkingConfig: { thinkingLevel: THINKING_LEVEL },
         abortSignal: signal,
       },
     })

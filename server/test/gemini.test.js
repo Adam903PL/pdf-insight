@@ -48,6 +48,12 @@ test('returns a valid first response with trusted file metadata', async (t) => {
   assert.equal(requests.length, 1)
 })
 
+test('asks for low thinking so the analysis fits the time budget', async (t) => {
+  const requests = provider(t, [JSON.stringify(valid)])
+  await analyzeDocument('Document text', 'actual.pdf', 2)
+  assert.equal(requests[0].generationConfig?.thinkingConfig?.thinkingLevel, 'LOW')
+})
+
 test('retries malformed JSON once and returns the corrected result', async (t) => {
   const requests = provider(t, ['{"summary":', JSON.stringify(valid)])
   const result = await analyzeDocument('Document text', 'actual.pdf', 2)
