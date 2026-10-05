@@ -6,6 +6,7 @@ import {
   type DragEvent,
   type RefObject,
 } from 'react'
+import { claimRickroll, RICKROLL_URL } from '@/lib/rickroll'
 import { primaryButton } from './styles'
 
 export type FileDropzoneProps = {
@@ -62,6 +63,16 @@ export function FileDropzone({ onFilesSelected, disabled = false, inputRef }: Fi
     onFilesSelected(Array.from(event.dataTransfer.files))
   }
 
+  // A one-time joke for first visitors: the very first click opens a rickroll in a new
+  // tab; every later click (and drag & drop, always) opens the picker as usual.
+  const handleChooseClick = () => {
+    if (claimRickroll()) {
+      window.open(RICKROLL_URL, '_blank', 'noopener,noreferrer')
+      return
+    }
+    inputRef.current?.click()
+  }
+
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
     // Clear the input so choosing the same file again still fires a change event.
@@ -103,7 +114,7 @@ export function FileDropzone({ onFilesSelected, disabled = false, inputRef }: Fi
 
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={handleChooseClick}
           disabled={disabled}
           className={`${primaryButton} mt-3`}
         >
