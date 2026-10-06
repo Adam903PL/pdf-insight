@@ -78,7 +78,7 @@ Expected: each command exits 0. Run `npm run format` only if format check requir
 
 **Files:** create `web/src/lib/filterHistory.ts`, modify `web/src/components/HistoryPanel.tsx`, modify `web/src/App.tsx`
 
-- [ ] **Step 1: Define filter types and normalization**
+- [x] **Step 1: Define filter types and normalization**
 
 Create `filterHistory.ts` with:
 
@@ -100,17 +100,17 @@ export function normalizeSearchText(value: string): string {
 }
 ```
 
-- [ ] **Step 2: Implement pure filter derivation**
+- [x] **Step 2: Implement pure filter derivation**
 
 In the same file, export `filterHistory(entries: readonly HistoryEntry[], filters: HistoryFilters): HistoryEntry[]`. Normalize the query once. For each entry, search only `result.document.title`, `result.document.fileName`, and `DOCUMENT_TYPE_LABELS[result.document.type]`. Compare the first 10 characters of `createdAt` lexically against non-empty `createdFrom` and `createdTo`; a date equal to either bound is included. If `withAmounts` is true, require `result.amounts.length > 0`. All four conditions combine with AND, and source order is preserved.
 
-- [ ] **Step 3: Add controlled local controls to HistoryPanel**
+- [x] **Step 3: Add controlled local controls to HistoryPanel**
 
 Keep search/filter state inside `HistoryPanel`, initialized as `{ query: '', createdFrom: '', createdTo: '', withAmounts: false }`. Derive visible rows with `filterHistory`; never modify or persist the original `entries` array. Add a labeled search input, two labeled `type="date"` inputs, and a labeled checkbox `Zawiera kwoty`. Add `Wyczyść filtry`, visible only when a filter is active. Preserve the existing full-history empty state. When filters are active and no row matches, show `Nie znaleziono analiz dla tych filtrów.` and a button that restores defaults. Accept a numeric `filtersResetKey` prop; use an effect to restore default filters whenever the key changes.
 
 In `App.tsx`, keep `filtersResetKey` as a number. Increment it in the same `onClear` callback that calls `clearHistory()`. Pass the value to `HistoryPanel`; this resets local filters on clear without resetting them when a new analysis is added.
 
-- [ ] **Step 4: Run frontend static checks**
+- [x] **Step 4: Run frontend static checks**
 
 Run from `web/`: `npm run lint`, `npm run format:check`, and `npm run typecheck`.
 

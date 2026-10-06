@@ -31,6 +31,8 @@ const PDF_READER_UNAVAILABLE =
 export function App() {
   const [state, dispatch] = useReducer(appReducer, INITIAL_STATE)
   const [history, setHistory] = useState<HistoryState>(() => loadHistory())
+  // Bumped when history is cleared, so the panel drops its search and filters too.
+  const [filtersResetKey, setFiltersResetKey] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const busy = isBusy(state)
 
@@ -126,8 +128,12 @@ export function App() {
           warning={history.warning}
           activeId={state.status === 'success' ? state.entry.id : null}
           disabled={busy}
+          filtersResetKey={filtersResetKey}
           onSelect={(entry) => dispatch({ type: 'HISTORY_ENTRY_OPENED', entry })}
-          onClear={() => setHistory(clearHistory())}
+          onClear={() => {
+            setHistory(clearHistory())
+            setFiltersResetKey((key) => key + 1)
+          }}
         />
       </div>
 
