@@ -120,23 +120,23 @@ Expected: each command exits 0. Run the formatter only if needed. Do not run tes
 
 **Files:** create `web/src/components/ComparisonView.tsx`, modify `web/src/components/HistoryPanel.tsx`, modify `web/src/App.tsx`
 
-- [ ] **Step 1: Create a display-only comparison component**
+- [x] **Step 1: Create a display-only comparison component**
 
 Create `ComparisonView.tsx` with props `{ entries: readonly [HistoryEntry, HistoryEntry]; onClose: () => void }`. Render a heading, a `Zamknij porównanie` button, and two labeled result columns. Each column displays document title and type, summary, key points, organizations, people, amounts with contexts, and dates with contexts. Use existing `formatAmount`, `formatIsoDate`, and `DOCUMENT_TYPE_LABELS`. At desktop widths use two equal columns; at narrow widths stack them. Do not call `ResultView`, the API, or localStorage from this component.
 
-- [ ] **Step 2: Add comparison selection to history**
+- [x] **Step 2: Add comparison selection to history**
 
 Extend `HistoryPanelProps` with `compareIds: readonly string[]`, `onToggleCompare: (entry: HistoryEntry) => void`, and `onOpenComparison: () => void`. Add one checkbox per visible history entry with an associated label `Dodaj <title> do porównania`. Put the existing row button and checkbox as sibling controls inside a flex `<li>`; never nest the checkbox inside the row button. Cap selection at two: when two IDs are selected, disable unchecked comparison checkboxes; checked entries remain removable. Show `Porównaj (2)` only when exactly two entries are selected. Keep clicking the existing history row button behavior unchanged.
 
-- [ ] **Step 3: Wire comparison state in App**
+- [x] **Step 3: Wire comparison state in App**
 
 In `App.tsx`, add `compareIds: string[]` and `comparisonOpen: boolean` state. Toggle IDs immutably, enforcing the same maximum of two. Derive the comparison tuple by looking up both IDs in `history.entries`; enable the open action only when both entries still exist. In the existing result column, render `ComparisonView` when `comparisonOpen` and the tuple is valid; otherwise render `StatusView`. Closing comparison returns to `StatusView`. When a history entry is selected, close comparison before dispatching `HISTORY_ENTRY_OPENED`. When clearing history, clear `compareIds`, close the comparison, and increment `filtersResetKey`. After adding an analysis, prune IDs no longer present in the returned `HistoryState.entries`, since history is capped at 10.
 
-- [ ] **Step 4: Keep comparison usable with active filters**
+- [x] **Step 4: Keep comparison usable with active filters**
 
 Keep selected IDs independent from search and filters, so typing a query does not silently discard a selection. Show a small selected-count message in `HistoryPanel`, even when a selected row is filtered out. The open action continues to resolve entries from the full history, not from the filtered list.
 
-- [ ] **Step 5: Run frontend static checks**
+- [x] **Step 5: Run frontend static checks**
 
 Run from `web/`: `npm run lint`, `npm run format:check`, and `npm run typecheck`.
 

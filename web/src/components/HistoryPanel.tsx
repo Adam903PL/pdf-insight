@@ -1,4 +1,5 @@
-import { useId, useRef, useState } from 'react'
+import { useId, useRef, useState, type RefObject } from 'react'
+import { MAX_COMPARED } from '@/lib/comparison'
 import {
   DEFAULT_HISTORY_FILTERS,
   filterHistory,
@@ -7,6 +8,7 @@ import {
 } from '@/lib/filterHistory'
 import { DOCUMENT_TYPE_LABELS, formatTimestamp } from '@/lib/format'
 import type { HistoryEntry } from '@/lib/history'
+import { primaryButton } from './styles'
 
 export type HistoryPanelProps = {
   entries: readonly HistoryEntry[]
@@ -17,8 +19,21 @@ export type HistoryPanelProps = {
   disabled: boolean
   /** Changing it restores the default search and filters (e.g. after clearing history). */
   filtersResetKey: number
+  /** Analyses picked for comparison; kept even while filters hide them. */
+  compareIds: readonly string[]
+  /** Shared so closing the comparison can hand focus back to the button that opened it. */
+  compareButtonRef: RefObject<HTMLButtonElement>
   onSelect: (entry: HistoryEntry) => void
   onClear: () => void
+  onToggleCompare: (entry: HistoryEntry) => void
+  onOpenComparison: () => void
+}
+
+function compareHint(selected: number): string {
+  if (selected === 0) return 'Zaznacz dwie analizy, aby zobaczyć je obok siebie.'
+  if (selected < MAX_COMPARED)
+    return `Wybrano ${selected} z ${MAX_COMPARED}. Zaznacz jeszcze jedną.`
+  return `Wybrano ${selected} z ${MAX_COMPARED} analiz do porównania.`
 }
 
 const fieldClass =
@@ -29,6 +44,8 @@ const linkButton =
 
 export function HistoryPanel(props: HistoryPanelProps) {
   const { entries, warning, activeId, disabled, filtersResetKey, onSelect, onClear } = props
+  const { compareIds, compareButtonRef, onToggleCompare, onOpenComparison } = props
+  const compareFull = compareIds.length >= MAX_COMPARED
   const headingId = useId()
   const searchId = useId()
   const fromId = useId()
@@ -149,6 +166,24 @@ export function HistoryPanel(props: HistoryPanelProps) {
             </p>
           </div>
 
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            {/* Counts the full selection, so a pick hidden by the filters is not forgotten. */}
+            <p aria-live="polite" className="text-sm text-ink-muted">
+              {compareHint(compareIds.length)}
+            </p>
+            {compareFull && (
+              <button
+                ref={compareButtonRef}
+                type="button"
+                onClick={onOpenComparison}
+                disabled={disabled}
+                className={primaryButton}
+              >
+                Porównaj ({compareIds.length})
+              </button>
+            )}
+          </div>
+
           {visibleEntries.length === 0 ? (
             <div className="mt-3 rounded-md border border-dashed border-ink/25 px-4 py-5 text-sm">
               <p>Nie znaleziono analiz dla tych filtrów.</p>
@@ -160,15 +195,17 @@ export function HistoryPanel(props: HistoryPanelProps) {
             <ul className="mt-3 divide-y divide-ink/10 border-y border-ink/10">
               {visibleEntries.map((entry) => {
                 const active = entry.id === activeId
+                const selected = compareIds.includes(entry.id)
                 const { title, type } = entry.result.document
                 return (
-                  <li key={entry.id}>
+                  // Row button and checkbox are siblings: a control inside a button is invalid.
+                  <li key={entry.id} className="flex items-stretch">
                     <button
                       type="button"
                       onClick={() => onSelect(entry)}
                       disabled={disabled}
                       aria-current={active ? 'true' : undefined}
-                      className={`flex w-full flex-col items-start gap-0.5 border-l-[3px] py-3 pr-2 pl-3 text-left transition-colors hover:bg-sheet/70 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      className={`flex min-w-0 flex-1 flex-col items-start gap-0.5 border-l-[3px] py-3 pr-2 pl-3 text-left transition-colors hover:bg-sheet/70 disabled:cursor-not-allowed disabled:opacity-60 ${
                         active ? 'border-stamp bg-sheet' : 'border-transparent'
                       }`}
                     >
@@ -177,6 +214,16 @@ export function HistoryPanel(props: HistoryPanelProps) {
                         {DOCUMENT_TYPE_LABELS[type]}, {formatTimestamp(entry.createdAt)}
                       </span>
                     </button>
+                    <label className="flex w-11 shrink-0 cursor-pointer items-center justify-center has-disabled:cursor-not-allowed has-disabled:opacity-60">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => onToggleCompare(entry)}
+                        disabled={disabled || (compareFull && !selected)}
+                        className="size-4 accent-stamp"
+                      />
+                      <span className="sr-only">Dodaj {title} do porównania</span>
+                    </label>
                   </li>
                 )
               })}

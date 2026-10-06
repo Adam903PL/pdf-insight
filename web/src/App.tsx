@@ -1,5 +1,6 @@
 import { useReducer, useRef, useState } from 'react'
 import { analyze, ApiError } from '@/api/analyze'
+import { ComparisonView } from '@/components/ComparisonView'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { FileDropzone } from '@/components/FileDropzone'
@@ -8,6 +9,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { ResultView } from '@/components/ResultView'
 import { WelcomeNotice } from '@/components/WelcomeNotice'
 import { appReducer, INITIAL_STATE, isBusy, type AppState } from '@/lib/appState'
+import { pruneCompareIds, resolveComparison, toggleCompareId } from '@/lib/comparison'
 import { validateSelection } from '@/lib/fileValidation'
 import {
   addHistoryEntry,
@@ -33,8 +35,13 @@ export function App() {
   const [history, setHistory] = useState<HistoryState>(() => loadHistory())
   // Bumped when history is cleared, so the panel drops its search and filters too.
   const [filtersResetKey, setFiltersResetKey] = useState(0)
+  // Comparison is UI state only: ids into history, resolved against the full list.
+  const [compareIds, setCompareIds] = useState<string[]>([])
+  const [comparisonOpen, setComparisonOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const compareButtonRef = useRef<HTMLButtonElement>(null)
   const busy = isBusy(state)
+  const comparison = resolveComparison(history.entries, compareIds)
 
   async function analyzeFile(file: File): Promise<void> {
     dispatch({ type: 'EXTRACTION_STARTED', fileName: file.name })
@@ -79,7 +86,10 @@ export function App() {
     dispatch({ type: 'ANALYSIS_SUCCEEDED', entry })
     // Saved after the result is on screen, so a storage failure can never replace it with
     // an error. History cannot change meanwhile: its controls are disabled while busy.
-    setHistory(addHistoryEntry(history.entries, entry))
+    const next = addHistoryEntry(history.entries, entry)
+    setHistory(next)
+    // History keeps the newest ten; a selected analysis may just have been dropped.
+    setCompareIds((ids) => pruneCompareIds(ids, next.entries))
   }
 
   const startAnalysis = (file: File): void => {
@@ -87,6 +97,8 @@ export function App() {
   }
 
   const handleFilesSelected = (files: File[]): void => {
+    // A new file means its progress or error must be visible, not hidden behind a comparison.
+    setComparisonOpen(false)
     const selection = validateSelection(files)
     if (!selection.ok) {
       const { message, fileName } = selection
@@ -98,6 +110,21 @@ export function App() {
 
   const openFilePicker = (): void => {
     fileInputRef.current?.click()
+  }
+
+  const toggleCompare = (entry: HistoryEntry): void => {
+    const next = toggleCompareId(compareIds, entry.id)
+    setCompareIds(next)
+    // An open comparison that lost its pair closes, rather than silently reappearing
+    // once another analysis is ticked.
+    if (resolveComparison(history.entries, next) === null) setComparisonOpen(false)
+  }
+
+  const closeComparison = (): void => {
+    setComparisonOpen(false)
+    // The status view takes focus itself when it has a heading to offer; otherwise
+    // focus returns to the button that opened the comparison.
+    compareButtonRef.current?.focus()
   }
 
   return (
@@ -119,7 +146,11 @@ export function App() {
 
       {/* Second in the DOM so on narrow screens the result follows the upload directly. */}
       <div className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-        <StatusView state={state} onRetry={startAnalysis} onChooseFile={openFilePicker} />
+        {comparisonOpen && comparison !== null ? (
+          <ComparisonView entries={comparison} onClose={closeComparison} />
+        ) : (
+          <StatusView state={state} onRetry={startAnalysis} onChooseFile={openFilePicker} />
+        )}
       </div>
 
       <div className="lg:col-start-1 lg:row-start-2">
@@ -129,11 +160,20 @@ export function App() {
           activeId={state.status === 'success' ? state.entry.id : null}
           disabled={busy}
           filtersResetKey={filtersResetKey}
-          onSelect={(entry) => dispatch({ type: 'HISTORY_ENTRY_OPENED', entry })}
+          compareIds={compareIds}
+          compareButtonRef={compareButtonRef}
+          onSelect={(entry) => {
+            setComparisonOpen(false)
+            dispatch({ type: 'HISTORY_ENTRY_OPENED', entry })
+          }}
           onClear={() => {
             setHistory(clearHistory())
+            setCompareIds([])
+            setComparisonOpen(false)
             setFiltersResetKey((key) => key + 1)
           }}
+          onToggleCompare={toggleCompare}
+          onOpenComparison={() => setComparisonOpen(true)}
         />
       </div>
 
