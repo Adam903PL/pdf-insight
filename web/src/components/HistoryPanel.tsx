@@ -199,14 +199,15 @@ export function HistoryPanel(props: HistoryPanelProps) {
                 const { title, type } = entry.result.document
                 return (
                   // Row button and checkbox are siblings: a control inside a button is invalid.
-                  <li key={entry.id} className="flex items-stretch">
+                  // The active background sits on the row, so it spans the checkbox cell too.
+                  <li key={entry.id} className={`flex items-stretch ${active ? 'bg-sheet' : ''}`}>
                     <button
                       type="button"
                       onClick={() => onSelect(entry)}
                       disabled={disabled}
                       aria-current={active ? 'true' : undefined}
                       className={`flex min-w-0 flex-1 flex-col items-start gap-0.5 border-l-[3px] py-3 pr-2 pl-3 text-left transition-colors hover:bg-sheet/70 disabled:cursor-not-allowed disabled:opacity-60 ${
-                        active ? 'border-stamp bg-sheet' : 'border-transparent'
+                        active ? 'border-stamp' : 'border-transparent'
                       }`}
                     >
                       <span className="line-clamp-2 font-medium break-words">{title}</span>
