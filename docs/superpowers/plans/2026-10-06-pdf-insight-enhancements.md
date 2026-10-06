@@ -26,21 +26,21 @@
 
 **Files:** `web/src/index.css`, `web/src/components/FileDropzone.tsx`, `web/src/components/LoadingState.tsx`, `web/src/components/ResultView.tsx`
 
-- [ ] **Step 1: Add motion-safe keyframes and dropzone feedback**
+- [x] **Step 1: Add motion-safe keyframes and dropzone feedback**
 
 In `web/src/index.css`, add two keyframes inside `@theme`: `result-enter` from `opacity: 0; translate: 0 0.5rem` to `opacity: 1; translate: 0 0`, and `paper-scan` from `translateX(-110%)` to `translateX(110%)`. Add `--animate-result-enter: result-enter 220ms ease-out both` and `--animate-paper-scan: paper-scan 1.8s ease-in-out infinite`.
 
 In `FileDropzone.tsx`, preserve all drag event behavior and Rickroll logic. Add `motion-safe:scale-[1.01]` to the active `dragging` state, keep the existing `transition-colors`, and add `motion-safe:transition-transform`. The non-dragging and disabled classes remain unchanged.
 
-- [ ] **Step 2: Make loading motion decorative and copy natural**
+- [x] **Step 2: Make loading motion decorative and copy natural**
 
 In `LoadingState.tsx`, retain the existing two real steps and spinner. Add an `aria-hidden="true"` decorative paper/document stack beside the heading with the scan line using `motion-safe:animate-paper-scan`. Do not add a percentage or elapsed-time estimate. Use `Czytamy tekst lokalnie — sam PDF zostaje u Ciebie.` for extraction and `Porządkujemy najważniejsze informacje. Zwykle trwa to od 5 do 15 sekund.` for analysis. Keep `Odczytano tekst z {pages} str.` for the completed extraction step.
 
-- [ ] **Step 3: Add result entrance motion and a restrained success accent**
+- [x] **Step 3: Add result entrance motion and a restrained success accent**
 
 Add `motion-safe:animate-result-enter` to the outer result article in `ResultView.tsx`. Add one static decorative sparkle/check accent next to the result title with `aria-hidden="true"` and the short label `Gotowe. Papierologia w ryzach.`; do not add a looping celebration animation. The existing document-type stamp and focus management remain unchanged.
 
-- [ ] **Step 4: Run frontend static checks**
+- [x] **Step 4: Run frontend static checks**
 
 Run from `web/`: `npm run lint`, `npm run format:check`, and `npm run typecheck`.
 

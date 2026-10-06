@@ -66,6 +66,28 @@ function Step(props: { number: number; status: StepStatus; label: string; detail
   )
 }
 
+/**
+ * A sheet being read, purely decorative: it shows no progress, and without motion the
+ * light is simply not drawn — the steps below carry all the status information.
+ */
+function PaperStack() {
+  return (
+    <div className="relative h-14 w-11 shrink-0" aria-hidden="true">
+      <div className="absolute inset-0 translate-x-1.5 -translate-y-1.5 rotate-3 rounded-sm border border-rule bg-paper" />
+      <div className="absolute inset-0 overflow-hidden rounded-sm border border-ink/20 bg-sheet">
+        <div className="mx-2 mt-3 space-y-1.5">
+          <div className="h-0.5 rounded-full bg-ink/20" />
+          <div className="h-0.5 rounded-full bg-ink/20" />
+          <div className="h-0.5 w-2/3 rounded-full bg-ink/20" />
+          <div className="h-0.5 rounded-full bg-ink/20" />
+          <div className="h-0.5 w-1/2 rounded-full bg-ink/20" />
+        </div>
+        <div className="absolute inset-0 hidden bg-linear-to-r from-transparent via-stamp/25 to-transparent motion-safe:block motion-safe:animate-paper-scan" />
+      </div>
+    </div>
+  )
+}
+
 /** The two real steps of the pipeline, in order, with the one in progress marked. */
 export function LoadingState({ stage, fileName, pages }: LoadingStateProps) {
   const extracted = stage === 'analyzing'
@@ -84,10 +106,15 @@ export function LoadingState({ stage, fileName, pages }: LoadingStateProps) {
       role="status"
       className="scroll-mt-4 rounded-lg border border-rule bg-sheet p-6 sm:p-8"
     >
-      <h2 ref={headingRef} tabIndex={-1} className="text-lg font-semibold">
-        Trwa analiza dokumentu
-      </h2>
-      <p className="mt-1 text-sm break-words text-ink-muted">Plik: {fileName}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h2 ref={headingRef} tabIndex={-1} className="text-lg font-semibold">
+            Trwa analiza dokumentu
+          </h2>
+          <p className="mt-1 text-sm break-words text-ink-muted">Plik: {fileName}</p>
+        </div>
+        <PaperStack />
+      </div>
 
       <ol className="mt-6 space-y-5">
         <Step
@@ -97,14 +124,18 @@ export function LoadingState({ stage, fileName, pages }: LoadingStateProps) {
           detail={
             extracted && pages !== null
               ? `Odczytano tekst z ${pages} str.`
-              : 'Tekst jest odczytywany w przeglądarce, plik nigdzie nie jest wysyłany.'
+              : 'Czytamy tekst lokalnie — sam PDF zostaje u Ciebie.'
           }
         />
         <Step
           number={2}
           status={extracted ? 'active' : 'pending'}
           label="Analiza treści przez AI"
-          detail={extracted ? 'Zwykle trwa to od 5 do 15 sekund.' : null}
+          detail={
+            extracted
+              ? 'Porządkujemy najważniejsze informacje. Zwykle trwa to od 5 do 15 sekund.'
+              : null
+          }
         />
       </ol>
     </section>

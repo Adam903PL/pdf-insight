@@ -38,6 +38,28 @@ function TypeStamp({ type }: { type: DocumentType }) {
   )
 }
 
+/**
+ * A small, one-off flourish for an analysis finished just now. It pops in once (never
+ * loops) and is simply static when the viewer limits motion.
+ */
+function SuccessAccent() {
+  return (
+    <p className="flex items-center gap-1.5 text-sm font-semibold text-stamp">
+      <svg
+        viewBox="0 0 20 20"
+        className="size-4 shrink-0 motion-safe:animate-stamp"
+        aria-hidden="true"
+      >
+        <path
+          d="M10 1.5l1.9 5.2 5.6 1.3-4.4 3.6 1.3 5.9L10 14.6l-4.4 2.9 1.3-5.9-4.4-3.6 5.6-1.3z"
+          fill="currentColor"
+        />
+      </svg>
+      Gotowe. Papierologia w ryzach.
+    </p>
+  )
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   const headingId = useId()
   return (
@@ -102,12 +124,15 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
     <article
       ref={cardRef}
       aria-labelledby={titleId}
-      className="scroll-mt-4 rounded-lg border border-rule bg-sheet shadow-[0_1px_0_rgb(27_34_51/0.04),0_16px_40px_-24px_rgb(27_34_51/0.35)]"
+      className="scroll-mt-4 rounded-lg border border-rule bg-sheet shadow-[0_1px_0_rgb(27_34_51/0.04),0_16px_40px_-24px_rgb(27_34_51/0.35)] motion-safe:animate-result-enter"
     >
       <header className="border-b border-rule px-6 pt-6 pb-6 sm:px-8 sm:pt-8">
         <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
           <div className="min-w-0">
-            <p className="text-sm break-words text-ink-muted">{documentInfo.fileName}</p>
+            {savedAt === null && <SuccessAccent />}
+            <p className={`text-sm break-words text-ink-muted ${savedAt === null ? 'mt-2' : ''}`}>
+              {documentInfo.fileName}
+            </p>
             <h2
               ref={titleRef}
               id={titleId}

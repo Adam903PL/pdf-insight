@@ -83,7 +83,7 @@ export function FileDropzone({ onFilesSelected, disabled = false, inputRef }: Fi
   const zoneState = disabled
     ? 'border-ink/15 opacity-60'
     : dragging
-      ? 'border-stamp bg-stamp-soft'
+      ? 'border-stamp bg-stamp-soft motion-safe:scale-[1.01]'
       : 'border-ink/30 bg-sheet/60'
 
   return (
@@ -93,7 +93,9 @@ export function FileDropzone({ onFilesSelected, disabled = false, inputRef }: Fi
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        className={`flex flex-col items-center rounded-lg border-2 border-dashed px-6 py-8 text-center transition-colors ${zoneState}`}
+        // Both transition utilities set `transition-property`, so the motion-safe one lists
+        // the colours again instead of replacing them with the scale alone.
+        className={`flex flex-col items-center rounded-lg border-2 border-dashed px-6 py-8 text-center transition-colors motion-safe:transition-[color,background-color,border-color,scale] ${zoneState}`}
       >
         <svg viewBox="0 0 40 48" className="h-12 w-10 text-stamp" aria-hidden="true">
           <path
