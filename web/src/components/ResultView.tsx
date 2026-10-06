@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { downloadMarkdown } from '@/lib/downloadMarkdown'
 import { downloadJson, serializeResult } from '@/lib/exportJson'
 import { focusAndReveal } from '@/lib/focus'
 import {
@@ -10,6 +11,13 @@ import {
   languageName,
   sortByDate,
 } from '@/lib/format'
+import {
+  NOT_FOUND,
+  RESULT_SECTIONS,
+  SECTION_TITLES,
+  sectionText,
+  type ResultSectionId,
+} from '@/lib/resultSections'
 import type { AnalysisResult, DocumentType } from '@/lib/schema'
 import { JsonPreview } from './JsonPreview'
 import { primaryButton, secondaryButton } from './styles'
@@ -26,6 +34,20 @@ const COPY_MESSAGES: Record<CopyStatus, string> = {
   idle: '',
   copied: 'Skopiowano JSON do schowka.',
   failed: 'Nie udało się skopiować. Rozwiń podgląd JSON i skopiuj tekst ręcznie.',
+}
+
+const SECTION_COPY_MESSAGES: Record<CopyStatus, string> = {
+  idle: '',
+  copied: 'Skopiowano do schowka.',
+  failed: 'Nie udało się skopiować. Zaznacz treść sekcji i skopiuj ją ręcznie.',
+}
+
+type DownloadStatus = 'idle' | 'downloaded' | 'failed'
+
+const MARKDOWN_MESSAGES: Record<DownloadStatus, string> = {
+  idle: '',
+  downloaded: 'Pobrano plik Markdown.',
+  failed: 'Nie udało się przygotować pliku Markdown. Wynik nadal możesz pobrać jako JSON.',
 }
 
 /** The document type as an ink stamp — the one loud element on the card. */
@@ -60,20 +82,108 @@ function SuccessAccent() {
   )
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  const headingId = useId()
+/**
+ * Links to each section. A collapsed list on phones; on wide screens it also sticks to
+ * the top while the long card scrolls past.
+ */
+function SectionNav() {
   return (
-    <section aria-labelledby={headingId} className="px-6 py-6 sm:px-8">
-      <h3 id={headingId} className="font-semibold">
-        {title}
-      </h3>
+    <details className="group border-b border-rule bg-sheet px-6 sm:px-8 lg:sticky lg:top-0 lg:z-10">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+        Nawigacja po wyniku
+        <svg
+          viewBox="0 0 16 16"
+          className="size-4 shrink-0 text-ink-muted transition-transform group-open:rotate-180 motion-reduce:transition-none"
+          aria-hidden="true"
+        >
+          <path
+            d="M4 6l4 4 4-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </summary>
+      <nav aria-label="Sekcje wyniku" className="pb-2">
+        <ul className="flex flex-col sm:flex-row sm:flex-wrap sm:gap-x-5">
+          {RESULT_SECTIONS.map(({ id, title }) => (
+            <li key={id}>
+              <a
+                href={`#${id}`}
+                className="inline-flex min-h-11 items-center text-sm text-ink-muted underline decoration-ink/30 underline-offset-4 hover:text-ink hover:decoration-ink"
+              >
+                {title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </details>
+  )
+}
+
+type SectionProps = {
+  id: ResultSectionId
+  copyStatus: CopyStatus
+  onCopy: () => void
+  children: ReactNode
+}
+
+function Section({ id, copyStatus, onCopy, children }: SectionProps) {
+  const headingId = useId()
+  const title = SECTION_TITLES[id]
+  return (
+    // The larger wide-screen margin keeps a jumped-to heading clear of the sticky nav.
+    <section
+      id={id}
+      aria-labelledby={headingId}
+      className="scroll-mt-4 px-6 py-6 sm:px-8 lg:scroll-mt-28"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <h3 id={headingId} className="font-semibold">
+          {title}
+        </h3>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="-my-2.5 -mr-3 inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-stamp transition-colors hover:bg-stamp-soft"
+        >
+          <svg viewBox="0 0 16 16" className="size-4" aria-hidden="true">
+            <rect
+              x="5.5"
+              y="5.5"
+              width="8"
+              height="8"
+              rx="1.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+            <path
+              d="M10.5 3.5v-.5A1.5 1.5 0 0 0 9 1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+          </svg>
+          Kopiuj<span className="sr-only"> sekcję {title}</span>
+        </button>
+      </div>
+      <p
+        aria-live="polite"
+        className={`text-sm ${copyStatus === 'failed' ? 'text-alert' : 'text-ink-muted'} ${copyStatus === 'idle' ? '' : 'mt-1'}`}
+      >
+        {SECTION_COPY_MESSAGES[copyStatus]}
+      </p>
       <div className="mt-3">{children}</div>
     </section>
   )
 }
 
 function NotFound() {
-  return <p className="text-ink-muted">Nie znaleziono w dokumencie.</p>
+  return <p className="text-ink-muted">{NOT_FOUND}</p>
 }
 
 function NameList({ label, names }: { label: string; names: string[] }) {
@@ -98,10 +208,22 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
   const titleId = useId()
   const titleRef = useRef<HTMLHeadingElement>(null)
   const cardRef = useRef<HTMLElement>(null)
-  // Remembers which result the copy feedback belongs to, so it clears itself when a
-  // different result is shown — derived during render, no effect needed.
+  // Feedback remembers which result it belongs to, so it clears itself when a different
+  // result is shown — derived during render, no effect needed.
   const [copied, setCopied] = useState<{ result: AnalysisResult; status: CopyStatus } | null>(null)
   const copyStatus: CopyStatus = copied?.result === result ? copied.status : 'idle'
+  // One section at a time shows copy feedback: the one copied last.
+  const [sectionCopy, setSectionCopy] = useState<{
+    result: AnalysisResult
+    sectionId: ResultSectionId
+    status: CopyStatus
+  } | null>(null)
+  const [markdownDownload, setMarkdownDownload] = useState<{
+    result: AnalysisResult
+    status: DownloadStatus
+  } | null>(null)
+  const markdownStatus: DownloadStatus =
+    markdownDownload?.result === result ? markdownDownload.status : 'idle'
   const json = serializeResult(result)
 
   // A new result replaces the status area: take keyboard and screen-reader focus to it.
@@ -118,6 +240,29 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
       // point at the manual route instead of failing silently.
       setCopied({ result, status: 'failed' })
     }
+  }
+
+  const copySection = async (sectionId: ResultSectionId): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(sectionText(result, sectionId))
+      setSectionCopy({ result, sectionId, status: 'copied' })
+    } catch {
+      // Same as the JSON copy: report the denial and leave the text there to select.
+      setSectionCopy({ result, sectionId, status: 'failed' })
+    }
+  }
+
+  const sectionProps = (id: ResultSectionId) => ({
+    id,
+    copyStatus:
+      sectionCopy?.result === result && sectionCopy.sectionId === id
+        ? sectionCopy.status
+        : ('idle' as const),
+    onCopy: () => void copySection(id),
+  })
+
+  const saveMarkdown = (): void => {
+    setMarkdownDownload({ result, status: downloadMarkdown(result) ? 'downloaded' : 'failed' })
   }
 
   return (
@@ -177,24 +322,37 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
           <button type="button" onClick={() => downloadJson(result)} className={primaryButton}>
             Pobierz JSON
           </button>
+          <button type="button" onClick={saveMarkdown} className={secondaryButton}>
+            Pobierz Markdown
+          </button>
           <button type="button" onClick={() => void copyJson()} className={secondaryButton}>
             Kopiuj JSON
           </button>
-          <p
-            aria-live="polite"
-            className={`w-full text-sm sm:w-auto ${copyStatus === 'failed' ? 'text-alert' : 'text-ink-muted'}`}
-          >
-            {COPY_MESSAGES[copyStatus]}
-          </p>
+          <div className="w-full text-sm sm:w-auto">
+            <p
+              aria-live="polite"
+              className={copyStatus === 'failed' ? 'text-alert' : 'text-ink-muted'}
+            >
+              {COPY_MESSAGES[copyStatus]}
+            </p>
+            <p
+              aria-live="polite"
+              className={markdownStatus === 'failed' ? 'text-alert' : 'text-ink-muted'}
+            >
+              {MARKDOWN_MESSAGES[markdownStatus]}
+            </p>
+          </div>
         </div>
       </header>
 
+      <SectionNav />
+
       <div className="divide-y divide-rule">
-        <Section title="Streszczenie">
+        <Section {...sectionProps('summary')}>
           <p className="max-w-prose font-serif text-lg leading-relaxed">{summary}</p>
         </Section>
 
-        <Section title="Najważniejsze punkty">
+        <Section {...sectionProps('key-points')}>
           <ul className="max-w-prose list-disc space-y-2 pl-5 font-serif text-[1.0625rem] leading-relaxed marker:text-stamp">
             {keyPoints.map((point, index) => (
               <li key={`${index}-${point}`}>{point}</li>
@@ -202,14 +360,14 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
           </ul>
         </Section>
 
-        <Section title="Organizacje i osoby">
+        <Section {...sectionProps('entities')}>
           <div className="grid gap-5 sm:grid-cols-2">
             <NameList label="Organizacje" names={entities.organizations} />
             <NameList label="Osoby" names={entities.people} />
           </div>
         </Section>
 
-        <Section title="Kwoty">
+        <Section {...sectionProps('amounts')}>
           {amounts.length === 0 ? (
             <NotFound />
           ) : (
@@ -239,7 +397,7 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
           )}
         </Section>
 
-        <Section title="Daty">
+        <Section {...sectionProps('dates')}>
           {dates.length === 0 ? (
             <NotFound />
           ) : (
@@ -259,7 +417,7 @@ export function ResultView({ result, savedAt }: ResultViewProps) {
           )}
         </Section>
 
-        <Section title="Słowa kluczowe">
+        <Section {...sectionProps('keywords')}>
           {keywords.length === 0 ? (
             <NotFound />
           ) : (

@@ -105,7 +105,7 @@ export function App() {
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">PDF Insight</h1>
           <p className="mt-3 text-ink-muted">
             Wgraj dokument PDF, a otrzymasz jego streszczenie i najważniejsze dane. Wynik możesz
-            pobrać jako plik JSON.
+            pobrać jako plik JSON lub Markdown.
           </p>
         </header>
         <FileDropzone

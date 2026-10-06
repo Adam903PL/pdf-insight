@@ -50,25 +50,25 @@ Expected: each command exits 0. If format check reports the touched files, run `
 
 **Files:** create `web/src/lib/markdown.ts`, create `web/src/lib/downloadMarkdown.ts`, modify `web/src/components/ResultView.tsx`
 
-- [ ] **Step 1: Create deterministic Markdown formatting**
+- [x] **Step 1: Create deterministic Markdown formatting**
 
 Create `markdown.ts` with `export function resultToMarkdown(result: AnalysisResult): string`. Import `AnalysisResult` as a type and the existing `DOCUMENT_TYPE_LABELS`, `formatAmount`, `formatIsoDate`, and `languageName` helpers. Return headings and plain Markdown lists in this order: title; document type, file name, date, page count, and language; summary; key points; organizations and people; amounts with context; dates with context; keywords. Use `-` list items, omit absent optional date/amount content rather than inventing values, and join lines with `\n`.
 
-- [ ] **Step 2: Create a safe browser Markdown download helper**
+- [x] **Step 2: Create a safe browser Markdown download helper**
 
 Create `downloadMarkdown.ts` with `export function downloadMarkdown(result: AnalysisResult): boolean`. Call `resultToMarkdown`, create a `Blob` with MIME `text/markdown;charset=utf-8`, create an object URL, click a temporary anchor with a sanitized filename derived from `result.document.fileName` (replace its extension with `.md` and replace path separators/control characters), then remove the anchor and revoke the object URL in `finally`. Return `true` on success and `false` if the browser download setup throws.
 
-- [ ] **Step 3: Give result sections stable anchors and copy controls**
+- [x] **Step 3: Give result sections stable anchors and copy controls**
 
 In `ResultView.tsx`, add stable section IDs `summary`, `key-points`, `entities`, `amounts`, `dates`, and `keywords`. Add a `<details>` navigation block before the sections, with a `<summary>` labeled `Nawigacja po wyniku` and links to each section. Give sections `scroll-mt-4` so fragment targets are not hidden when scrolled into view.
 
 Extend the local `Section` component with `id`, `copyText`, `copyStatus`, and `onCopy` props. For each of the six result sections, construct plain text from that section's existing data and show a `Kopiuj` button. Use a single `copiedSectionId` state; on clipboard success set the ID, and on rejection set an error state for that section. Render feedback in `aria-live="polite"` beside the control; when copy fails, say the section can be selected and copied manually. Keep the existing JSON copy state and button independent.
 
-- [ ] **Step 4: Add Markdown action without removing JSON actions**
+- [x] **Step 4: Add Markdown action without removing JSON actions**
 
 Import `downloadMarkdown`. Add a secondary `Pobierz Markdown` button next to `Pobierz JSON` and `Kopiuj JSON`. If the helper returns `false`, show an inline Polish error message and leave both existing JSON actions available. If it returns `true`, show a polite success message.
 
-- [ ] **Step 5: Run frontend static checks**
+- [x] **Step 5: Run frontend static checks**
 
 Run from `web/`: `npm run lint`, `npm run format:check`, and `npm run typecheck`.
 
